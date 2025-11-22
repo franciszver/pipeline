@@ -1,5 +1,9 @@
 # Test UI Environment Variables Setup
 
+> **⚠️ SECURITY NOTE:** All credentials shown in this file are **PLACEHOLDER EXAMPLES ONLY**. 
+> Never commit actual API keys, passwords, or secrets to version control.
+> Always use environment variables or secure secret management systems in production.
+
 ## Minimum Required (Basic Test UI)
 
 To just **create scripts** and test the UI interface, you only need:

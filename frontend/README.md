@@ -65,9 +65,11 @@ Create a `.env` file in the root directory:
 
 ```env
 # Database
+# NOTE: Replace 'user' and 'password' with your actual database credentials
 DATABASE_URL="postgresql://user:password@localhost:5432/pipeline"
 
 # NextAuth
+# NOTE: Generate a secure random secret for production (e.g., using: openssl rand -base64 32)
 NEXTAUTH_SECRET="your-secret-key-here"
 NEXTAUTH_URL="http://localhost:3000"
 

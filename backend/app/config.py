@@ -12,7 +12,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+psycopg://postgres@localhost:5432/gauntlet_pipeline"
 
     # JWT Authentication
-    JWT_SECRET_KEY: str = "dev-secret-key-change-in-production"
+    # WARNING: JWT_SECRET_KEY must be set via environment variable in production
+    # Using a default only for local development - NEVER use in production
+    JWT_SECRET_KEY: str = "dev-secret-key-change-in-production"  # Only for local dev
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
