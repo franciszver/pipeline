@@ -1,0 +1,128 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+# lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Alembic
+alembic/versions/__pycache__/
+
+# Docker
+*.pid
+
+# macOS
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# IDE
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Video outputs (for testing)
+outputs/
+videos/
+thumbnails/
+
+# AWS Infrastructure - sensitive files
+infra/aws/.rendered-task-definition.json
+*.rendered-task-definition.json
+
+# Sensitive configuration files
+**/.env
+**/.env.local
+**/.env.*.local
+*.secret
+*.key
+*secrets*.json
+*credentials*.json
+backend/pipeline_orchestrator.pem
+deploy_ec2.ps1
+deploy_simple.ps1
+quick_deploy.ps1
+openapi-temp.json
+
+# Security audit reports
+git-security-audit-report.txt
+*security-audit*.txt
+
+# Deployment guides with sensitive info
+backend/DEPLOY_SCAFFOLD_TEST_UI.md
+# Remotion dependencies
+remotion/node_modules/
+Doc2/cursor_conversations/
+install_ffmpeg_ec2.ps1
+backend/AGENT5_BUN_INSTALLATION.md
+backend/install_bun_ec2.ps1
+check_ec2_status.ps1
+security-check-pending-changes.md

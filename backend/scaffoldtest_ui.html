@@ -1,0 +1,1902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Processing Test UI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+            font-size: 28px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 10px;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status-section {
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 2px solid #e0e0e0;
+        }
+
+        .status-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+
+        .agent-status {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .agent-label {
+            font-weight: 600;
+            color: #333;
+            margin-right: 15px;
+            min-width: 80px;
+        }
+
+        .status-light {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #000;
+            margin-right: 15px;
+            transition: background-color 0.3s;
+        }
+
+        .status-light.starting {
+            background: #ff0000;
+            animation: blink 1s infinite;
+        }
+
+        .status-light.processing {
+            background: #ffd700;
+            animation: none;
+        }
+
+        .status-light.finished {
+            background: #00ff00;
+            animation: none;
+        }
+
+        .status-light.error {
+            background: #ff0000;
+            animation: none;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .status-text {
+            color: #666;
+            font-size: 14px;
+            flex: 1;
+        }
+
+        .error-message {
+            color: #ff0000;
+            font-size: 12px;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .connection-status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .connection-status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .connection-status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .connection-status.connecting {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        /* Tab styles */
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.3s;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+
+        .tab-btn:hover {
+            color: #667eea;
+        }
+
+        .tab-btn.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Agent 4 specific styles */
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            transition: border-color 0.3s;
+            resize: vertical;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+            background: white;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .result-section {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .result-section h3 {
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .result-content {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 11px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .audio-player {
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        .audio-file-item {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .audio-file-item h4 {
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .audio-file-meta {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .video-player {
+            width: 100%;
+            max-width: 100%;
+            border-radius: 6px;
+            background: #000;
+        }
+
+        .version-badge {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            z-index: 9999;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .version-badge .version-label {
+            color: #a0a0a0;
+            margin-right: 5px;
+        }
+
+        .version-badge .version-time {
+            color: #4ade80;
+            font-weight: 600;
+        }
+
+        #kill-all-agents-btn {
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+        }
+
+        #kill-all-agents-btn:hover {
+            background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%);
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+        }
+
+        #kill-all-agents-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .button-row .submit-btn {
+            flex: 1;
+        }
+
+        #restart-agent5-btn {
+            font-size: 14px;
+            padding: 14px;
+        }
+
+        @media (max-width: 600px) {
+            .button-row {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Version Timestamp Badge -->
+    <div class="version-badge">
+        <span class="version-label">Loaded:</span>
+        <span class="version-time" id="version-timestamp">Loading...</span>
+    </div>
+    <div class="container">
+        <h1>Agent Processing Test</h1>
+
+        <div class="tabs">
+            <button type="button" class="tab-btn active" data-tab="pipeline">Full Pipeline</button>
+            <button type="button" class="tab-btn" data-tab="agent4">Test Agent 4</button>
+            <button type="button" class="tab-btn" data-tab="agent5">Test Agent 5</button>
+            <button type="button" class="tab-btn" data-tab="scenetest">Scene Test</button>
+            <button type="button" class="tab-btn" data-tab="videotest">Video Test</button>
+        </div>
+
+        <!-- Full Pipeline Tab -->
+        <div id="pipeline-tab" class="tab-content active">
+        <form id="processingForm">
+            <div class="form-group">
+                <label for="agentSelection">Select Agent:</label>
+                <select id="agentSelection" name="agentSelection" required>
+                    <option value="Full Test">Full Test</option>
+                    <option value="Agent2">Agent2</option>
+                    <option value="Agent4">Agent4</option>
+                    <option value="Agent5">Agent5</option>
+                </select>
+            </div>
+
+            <!-- Full Test fields -->
+            <div class="form-group" id="fullTestGroup">
+                <label for="fullTestSessionID">Session ID:</label>
+                <input type="text" id="fullTestSessionID" name="fullTestSessionID" value="3oyCVhHND75RwUKhdLpy0">
+                <label for="fullTestUserID">User ID:</label>
+                <input type="text" id="fullTestUserID" name="fullTestUserID" value="f6643f6a-8d48-46ff-978f-77df393ac752">
+            </div>
+
+            <!-- Agent2 fields -->
+            <div class="form-group" id="agent2Group" style="display: none;">
+                <label for="agent2UserID">User ID:</label>
+                <input type="text" id="agent2UserID" name="agent2UserID" value="f6643f6a-8d48-46ff-978f-77df393ac752">
+                <label for="agent2SessionID">Session ID:</label>
+                <input type="text" id="agent2SessionID" name="agent2SessionID">
+            </div>
+
+            <!-- Agent4 fields -->
+            <div class="form-group" id="agent4Group" style="display: none;">
+                <label for="agent4UserID">User ID:</label>
+                <input type="text" id="agent4UserID" name="agent4UserID" value="f6643f6a-8d48-46ff-978f-77df393ac752">
+                <label for="agent4SessionID">Session ID:</label>
+                <input type="text" id="agent4SessionID" name="agent4SessionID">
+                <label for="agent4Voice">Voice:</label>
+                <select id="agent4Voice" name="agent4Voice">
+                    <option value="alloy">Alloy</option>
+                    <option value="echo">Echo</option>
+                    <option value="fable">Fable</option>
+                    <option value="onyx">Onyx</option>
+                    <option value="nova">Nova</option>
+                    <option value="shimmer">Shimmer</option>
+                </select>
+                <label for="agent4AudioOption">Audio Option:</label>
+                <select id="agent4AudioOption" name="agent4AudioOption">
+                    <option value="tts">TTS</option>
+                    <option value="upload">Upload</option>
+                    <option value="none">None</option>
+                    <option value="instrumental">Instrumental</option>
+                </select>
+                <label for="agent4Script">Script (JSON):</label>
+                <textarea id="agent4Script" name="agent4Script" rows="15">{
+  "hook": {
+    "text": "Example hook text",
+    "duration": "10"
+  },
+  "concept": {
+    "text": "Example concept text",
+    "duration": "15"
+  },
+  "process": {
+    "text": "Example process text",
+    "duration": "22"
+  },
+  "conclusion": {
+    "text": "Example conclusion text",
+    "duration": "10"
+  }
+}</textarea>
+            </div>
+
+            <!-- Agent5 fields -->
+            <div class="form-group" id="agent5Group" style="display: none;">
+                <label for="agent5UserID">User ID:</label>
+                <input type="text" id="agent5UserID" name="agent5UserID" value="f6643f6a-8d48-46ff-978f-77df393ac752">
+                <label for="agent5SessionID">Session ID:</label>
+                <input type="text" id="agent5SessionID" name="agent5SessionID">
+                <label for="agent5SupersessionID">Super Session ID:</label>
+                <input type="text" id="agent5SupersessionID" name="agent5SupersessionID">
+            </div>
+            
+            <button type="submit" class="submit-btn" id="submitBtn">Start Processing</button>
+        </form>
+
+        <div class="status-section">
+            <h2>Agent Status</h2>
+            
+            <div class="button-row">
+                <button type="button" id="kill-all-agents-btn" class="submit-btn">
+                    Kill All Active Agents
+                </button>
+                <button type="button" id="restart-agent5-btn" class="submit-btn">
+                    🔄 Restart from Concatenation
+                </button>
+            </div>
+            
+            <div class="agent-status">
+                <span class="agent-label">Orchestrator</span>
+                <div class="status-light" id="light-orchestrator"></div>
+                <div class="status-text" id="status-orchestrator">Not triggered</div>
+                <div class="error-message" id="error-orchestrator"></div>
+            </div>
+            
+            <div class="agent-status">
+                <span class="agent-label">Agent2</span>
+                <div class="status-light" id="light-agent2"></div>
+                <div class="status-text" id="status-agent2">Not triggered</div>
+                <div class="error-message" id="error-agent2"></div>
+            </div>
+            
+            <div class="agent-status">
+                <span class="agent-label">Agent4</span>
+                <div class="status-light" id="light-agent4"></div>
+                <div class="status-text" id="status-agent4">Not triggered</div>
+                <div class="error-message" id="error-agent4"></div>
+            </div>
+            
+            <div class="agent-status">
+                <span class="agent-label">Agent5</span>
+                <div class="status-light" id="light-agent5"></div>
+                <div class="status-text" id="status-agent5">Not triggered</div>
+                <div class="error-message" id="error-agent5"></div>
+            </div>
+
+            <div class="connection-status disconnected" id="connectionStatus">
+                WebSocket: Disconnected
+            </div>
+
+            <div class="result-section" id="video-result" style="display: none;">
+                <h3>Generated Video</h3>
+                <video id="video-player" controls class="video-player">
+                    Your browser does not support video playback.
+                </video>
+            </div>
+
+            <div class="result-section" id="videoSessionData" style="display: none;">
+                <h3>Video Session Data</h3>
+                <pre id="videoSessionDataContent" class="result-content"></pre>
+            </div>
+        </div>
+        </div>
+
+        <!-- Agent 4 Test Tab -->
+        <div id="agent4-tab" class="tab-content">
+            <form id="agent4Form">
+                <div class="form-group">
+                    <label for="a4-sessionID">Session ID:</label>
+                    <input type="text" id="a4-sessionID" name="sessionID" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="a4-voice">Voice:</label>
+                    <select id="a4-voice" name="voice">
+                        <option value="alloy">Alloy (Neutral, balanced)</option>
+                        <option value="echo">Echo (Male, clear)</option>
+                        <option value="fable">Fable (British, expressive)</option>
+                        <option value="onyx">Onyx (Deep, authoritative)</option>
+                        <option value="nova">Nova (Female, energetic)</option>
+                        <option value="shimmer">Shimmer (Warm, friendly)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="a4-script">Script (JSON):</label>
+                    <textarea id="a4-script" name="script" rows="15" required>{
+  "hook": {
+    "text": "Have you ever wondered how artificial intelligence can understand human language?",
+    "duration": "12"
+  },
+  "concept": {
+    "text": "Large language models are neural networks trained on vast amounts of text data to predict and generate human-like text.",
+    "duration": "15"
+  },
+  "process": {
+    "text": "These models learn patterns in language by analyzing billions of sentences, understanding context, grammar, and even nuance. They use attention mechanisms to focus on relevant parts of the input.",
+    "duration": "22"
+  },
+  "conclusion": {
+    "text": "Understanding LLMs helps us better leverage AI tools in our work and daily lives. Start exploring what these models can do for you today!",
+    "duration": "11"
+  }
+}</textarea>
+                </div>
+
+                <button type="submit" class="submit-btn" id="a4-submitBtn">Generate Audio</button>
+            </form>
+
+            <div class="result-section" id="a4-results" style="display: none;">
+                <h3>Results</h3>
+                <div id="a4-audio-files"></div>
+                <div class="result-content" id="a4-result-json"></div>
+            </div>
+
+            <div class="connection-status disconnected" id="a4-status">
+                Ready
+            </div>
+        </div>
+
+        <!-- Agent 5 Test Tab - AI Video Generation -->
+        <div id="agent5-tab" class="tab-content">
+            <h3 style="margin-bottom: 15px; color: #4CAF50;">Test Agent 5 - AI Video Generation</h3>
+            <p style="margin-bottom: 15px; color: #666;">
+                Generate videos using AI (Replicate Minimax). All 4 videos are generated in parallel.
+            </p>
+
+            <form id="agent5Form">
+                <div class="form-group">
+                    <label for="a5-pipeline-data">Pipeline Data (JSON):</label>
+                    <textarea id="a5-pipeline-data" name="pipeline_data" rows="30" required>{
+  "agent_2_data": {
+    "base_scene": {
+      "style": "Pixar/Disney-quality 3D animation with soft subsurface scattering on skin, detailed fabric textures, realistic hair dynamics, warm depth of field blur on background, smooth CGI quality, kid-friendly educational aesthetic, consistent character rigs and models throughout all scenes",
+      "setting": "Bright modern elementary classroom with cream-colored walls and light blue trim along the bottom, light honey-colored wood floors with subtle grain, large floor-to-ceiling windows along left wall showing animated green oak trees and blue sky outside, 8 small wooden student desks in 2 rows of 4 with light brown maple wood finish and blue plastic chairs, teacher's large wooden desk at front right with globe and small fern plant, colorful alphabet poster and periodic table on front wall, potted green ferns on white windowsill, large world map above whiteboard, tall bookshelf with bright multicolored book spines against back wall, student artwork pinned to bulletin board on right wall",
+      "teacher": "Ms. Rivera, animated woman in early 30s, warm medium tan skin tone, shoulder-length dark brown hair in neat ponytail with side-swept bangs, warm brown eyes with expressive eyebrows, friendly smile showing white teeth, average height with professional build, animated in signature Pixar character style, light sky blue cardigan sweater over crisp white button-up shirt, dark navy blue dress pants, comfortable tan flat shoes, small silver stud earrings, enthusiastic hand gestures when teaching, expressive animated eyebrows, warm and encouraging smile, uses open palm gestures, stands with confident posture, moves smoothly around classroom",
+      "students": "8 diverse animated 8-year-old children with signature Pixar big expressive eyes and stylized features, various skin tones and hairstyles, all wearing casual school clothes (t-shirts, jeans, dresses), engaged and attentive expressions, seated in semi-circle facing teacher. Key students include: Maya (girl with round glasses and black hair in two braids, light brown skin, green t-shirt with flower design, eager and raises hand often), Oliver (boy with curly bright orange-red hair, pale skin with freckles, blue and white striped polo shirt, curious expression), Sofia (girl with long blonde hair in ponytail, light skin, purple dress with white collar, thoughtful and takes notes), James (boy with short black hair and darker skin, bright yellow t-shirt, wide smile and excited demeanor), Aisha (girl with brown skin and natural curly black hair in puffs, pink hoodie, asks questions), Ethan (boy with straight brown hair, medium skin, red sweater, focused and concentrating)"
+    },
+    "script": {
+      "hook": {
+        "text": "Good morning class! Today we're going to discover one of nature's most amazing secrets.",
+        "scene_text": "Welcome to the world of photosynthesis, where plants transform sunlight into energy.",
+        "scene_action": "Teacher walks between desks gesturing with open palms, students look up with wide eyes, Maya with glasses raises hand eagerly, Oliver with curly orange hair leans forward curiously.",
+        "duration": 12,
+        "visual_prompt": "Wide opening shot from back of classroom showing cream-colored walls with soft blue trim, honey-colored wood floors. Slow dolly forward toward Ms. Rivera (brown ponytail, sky-blue cardigan, white button-up shirt) walking between 8 wooden student desks gesturing with open palms. Students look up with wide expressive Pixar-style eyes - Maya with glasses and braids raises hand eagerly, Oliver with curly orange hair leans forward curiously, Sofia in purple dress takes notes. Warm golden afternoon light streams through large left-side windows showing animated green oak trees. Alphabet poster and periodic table visible on front wall, bookshelf with colorful spines against back wall. Vibrant Pixar 3D animation with consistent character rigs.",
+        "previous_scene_context": "first scene"
+      },
+      "concept": {
+        "text": "Let's look at how plants use sunlight to create their own food through photosynthesis.",
+        "scene_text": "Plants capture sunlight and convert it into food through a process called photosynthesis.",
+        "scene_action": "Ms. Rivera holds up a small potted plant near the window, students gather in semicircle around her, pointing and leaning in with animated enthusiasm.",
+        "duration": 12,
+        "visual_prompt": "Follow-cam behind Ms. Rivera (same brown ponytail, sky-blue cardigan) walking from desks toward bright window. Gentle depth-of-field shift focusing on small potted plant with vibrant green leaves she picks up. Same 8 diverse students (Maya, Oliver, Sofia, James in yellow shirt, Aisha in pink hoodie, Ethan in red sweater) stand and gather in semicircle around teacher near window. Brighter lighting near window area, same cream walls and honey wood floors. Students point and lean in with animated enthusiasm, same expressive Pixar character models. Smooth camera movement maintains continuity from previous scene.",
+        "previous_scene_context": "hook"
+      },
+      "process": {
+        "text": "Inside each leaf, tiny structures called chloroplasts capture sunlight and transform it into energy and oxygen.",
+        "scene_text": "Inside leaves, chloroplasts capture sunlight and create energy and oxygen for the plant.",
+        "scene_action": "Close-up on green leaf, camera pushes through into microscopic world, glowing chloroplasts pulse with golden light particles swirling in, blue and silver sparkles flow along pathways.",
+        "duration": 12,
+        "visual_prompt": "Extreme close-up on vibrant green leaf, camera pushes through surface into microscopic world. Floating camera movement inside leaf showing soft glowing green textures. Tiny emerald orb-like chloroplasts softly glow and pulse. Gold sparkly particles (sunlight) swirl into chloroplasts which glow brighter and emit glowing energy trails. Blue wisps and silver sparkles (oxygen and energy molecules) combine and move gently along bright pathways. Magical but scientifically inspired Pixar-friendly CGI with smooth motion, educational science visualization aesthetic, vibrant colors.",
+        "previous_scene_context": "concept"
+      },
+      "conclusion": {
+        "text": "And that's how every plant around us turns sunlight into the oxygen we breathe and the food we eat!",
+        "scene_text": "Plants everywhere turn sunlight into the oxygen we breathe and the food we eat.",
+        "scene_action": "Pull back from microscopic view to classroom, Ms. Rivera gives thumbs-up, students point excitedly out window at school garden, camera rises for uplifting final shot.",
+        "duration": 12,
+        "visual_prompt": "Pull-back transition from glowing chloroplasts to window view, rotate to front-facing shot of group. Same cream classroom with blue trim, Ms. Rivera smiles and gives thumbs-up. Same 8 students (Maya, Oliver, Sofia, James, Aisha, Ethan, plus two background students) point excitedly out window at bright school garden with flowers and plants visible outside. Students chat silently with animated enthusiasm, maintaining exact same Pixar character designs and rigs. Camera rises slightly for uplifting final shot, warm afternoon lighting, energetic happy ending.",
+        "previous_scene_context": "process"
+      }
+    }
+  },
+  "agent_4_data": {
+    "audio_files": [
+      {"part": "hook", "url": "https://pipeline-backend-assets.s3.amazonaws.com/1/1_HwdchTTEusJSdQ_s/audio_hook.mp3?AWSAccessKeyId=PLACEHOLDER&Signature=PLACEHOLDER&Expires=1763694052", "duration": 4.4},
+      {"part": "concept", "url": "https://pipeline-backend-assets.s3.amazonaws.com/1/1_HwdchTTEusJSdQ_s/audio_concept.mp3?AWSAccessKeyId=PLACEHOLDER&Signature=PLACEHOLDER&Expires=1763694052", "duration": 7.6},
+      {"part": "process", "url": "https://pipeline-backend-assets.s3.amazonaws.com/1/1_HwdchTTEusJSdQ_s/audio_process.mp3?AWSAccessKeyId=PLACEHOLDER&Signature=PLACEHOLDER&Expires=1763694052", "duration": 11.6},
+      {"part": "conclusion", "url": "https://pipeline-backend-assets.s3.amazonaws.com/1/1_HwdchTTEusJSdQ_s/audio_conclusion.mp3?AWSAccessKeyId=PLACEHOLDER&Signature=PLACEHOLDER&Expires=1763694052", "duration": 5.8}
+    ],
+    "background_music": {
+      "url": "https://pipeline-backend-assets.s3.amazonaws.com/music/library/test_calm_01.mp3?AWSAccessKeyId=PLACEHOLDER&Signature=PLACEHOLDER&Expires=1763694052",
+      "duration": 60
+    }
+  }
+}</textarea>
+                </div>
+
+                <button type="submit" class="submit-btn" id="a5-submitBtn">Generate AI Video</button>
+            </form>
+
+            <div class="result-section" id="a5-results" style="display: none;">
+                <h3>Generated Video</h3>
+                <video id="a5-video-player" controls preload="auto" class="video-player" style="width: 100%; max-width: 800px; background: #000;">
+                    Your browser does not support video playback.
+                </video>
+                <div id="a5-video-info" style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px; font-family: monospace; font-size: 12px;">
+                    Video info will appear here...
+                </div>
+                <p style="margin-top: 10px;">
+                    <a id="a5-video-download" href="#" download="generated_video.mp4" style="color: #4CAF50;">
+                        Download Video
+                    </a>
+                </p>
+                <div class="result-content" id="a5-result-json" style="margin-top: 15px;"></div>
+            </div>
+
+            <div class="connection-status disconnected" id="a5-status">
+                Ready
+            </div>
+        </div>
+
+        <!-- Scene Test Tab -->
+        <div id="scenetest-tab" class="tab-content">
+            <h2>Scene Test</h2>
+            <p style="margin-bottom: 15px; color: #666;">Generate continuous scene with perfect frame-to-frame continuity. Clips are generated <strong>sequentially</strong> - each clip starts from the last frame of the previous clip using image-to-video generation.</p>
+
+            <form id="sceneTestForm">
+                <div class="form-group">
+                    <label for="scene-base">Scene Configuration (JSON):</label>
+                    <textarea id="scene-base" name="sceneBase" rows="15" placeholder="Complete scene configuration as JSON...">{
+  "visual": {
+    "style": "Pixar/Disney-quality 3D animation with soft subsurface scattering on skin, detailed fabric textures, realistic hair dynamics, warm depth of field blur on background, smooth CGI quality, kid-friendly educational aesthetic",
+    "color_palette": {
+      "primary": "warm yellows and soft blues, cream and sky blue tones",
+      "accent": "vibrant emerald greens, bright orange, warm wood tones",
+      "lighting": "warm golden hour lighting (4pm afternoon), soft shadows, light streaming from left-side windows creating gentle rim lighting on characters, no harsh contrasts"
+    },
+    "setting": {
+      "location": "bright modern elementary classroom",
+      "walls": "cream-colored walls with light blue trim, colorful alphabet poster visible",
+      "floor": "light honey-colored wood floors",
+      "windows": "large floor-to-ceiling windows on left side showing animated green oak trees gently swaying outside",
+      "props": "student desks with pencils and notebooks, small potted succulent on teacher's desk, whiteboard in background"
+    },
+    "characters": {
+      "teacher": "Ms. Rivera, animated woman in early 30s, warm medium tan skin, shoulder-length dark brown hair in ponytail, light sky blue cardigan over white shirt, friendly warm smile, positioned center-left of frame",
+      "students": "8 diverse animated 8-year-old children with signature Pixar big expressive eyes, various skin tones and hairstyles, casual school clothes (t-shirts, jeans, dresses), engaged and attentive expressions, seated in semi-circle facing teacher"
+    },
+    "camera": {
+      "primary_shot": "medium shot at eye level with slight warm tilt",
+      "movement": "smooth, gentle camera movements only - predominantly static with occasional slow push-in",
+      "framing": "maintain consistent spatial relationships between characters across all clips"
+    },
+    "animation": {
+      "motion_style": "gentle, natural movements - children subtly shifting in seats, teacher's cardigan moving softly with gestures, avoid rapid movements",
+      "continuity": "characters maintain consistent appearance and positioning across clips, continuous lighting angle throughout all clips, smooth frame-to-frame transitions"
+    },
+    "duration": 12,
+    "scene_text": "Welcome to the world of photosynthesis, where plants transform sunlight into energy.",
+    "scene_action": "Teacher walks between desks gesturing with open palms, students look up with wide eyes, Maya with glasses raises hand eagerly, Oliver with curly orange hair leans forward curiously.",
+    "previous_scene_context": "first scene"
+  },
+  "audio": {
+    "part": "hook",
+    "url": "https://pipeline-backend-assets.s3.amazonaws.com/1/1_HwdchTTEusJSdQ_s/audio_hook.mp3?AWSAccessKeyId=PLACEHOLDER&Signature=PLACEHOLDER&Expires=1763694052",
+    "duration": 4.4
+  }
+}</textarea>
+                </div>
+
+                <button type="submit" class="submit-btn" id="scene-submitBtn">Generate Scene</button>
+            </form>
+
+            <div class="result-section" id="scene-results" style="display: none;">
+                <h3>Generated Scene</h3>
+                <video id="scene-video-player" controls class="video-player">
+                    Your browser does not support video playback.
+                </video>
+                <div id="scene-video-info" style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px; font-family: monospace; font-size: 12px;">
+                    Video info will appear here...
+                </div>
+                <p style="margin-top: 10px;">
+                    <a id="scene-video-download" href="#" download="scene.mp4" style="color: #667eea;">
+                        Download Video
+                    </a>
+                </p>
+                <div class="result-content" id="scene-result-json"></div>
+            </div>
+
+            <div class="connection-status disconnected" id="scene-status">
+                Ready
+            </div>
+        </div>
+
+        <!-- Video Test Tab -->
+        <div id="videotest-tab" class="tab-content">
+            <h2>Video Player Test</h2>
+            <p style="margin-bottom: 15px; color: #666;">Test video playback from S3 URLs</p>
+
+            <div class="form-group">
+                <label for="video-url-input">S3 Video URL</label>
+                <input type="text" id="video-url-input" value="" placeholder="Paste S3 video URL here...">
+            </div>
+
+            <button type="button" class="submit-btn" id="load-video-btn">Load Video</button>
+
+            <div class="result-section" id="video-test-results" style="display: block; margin-top: 20px;">
+                <h3>Video Player</h3>
+                <video id="test-video-player" controls preload="auto" class="video-player" style="width: 100%; max-width: 800px; background: #000;">
+                    Your browser does not support video playback.
+                </video>
+                <div id="video-test-info" style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px; font-family: monospace; font-size: 12px;">
+                    Enter a URL and click "Load Video" to test playback
+                </div>
+                <p style="margin-top: 10px;">
+                    <a id="video-test-download" href="#" download="test_video.mp4" style="color: #667eea;">
+                        Download Video
+                    </a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let websocket = null;
+        let currentSessionId = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+        const reconnectDelay = 3000; // 3 seconds
+
+        // Determine API base URL - support ALB, API Gateway, and direct EC2
+        // Production URLs (via ALB)
+        const ALB_API_URL = 'https://api.classclipscohort3.com';
+        const ALB_WS_URL = 'wss://api.classclipscohort3.com';
+        
+        // API Gateway URLs (fallback)
+        const WS_API_GATEWAY_URL = 'wss://927uc04ep5.execute-api.us-east-2.amazonaws.com/prod';
+        const REST_API_GATEWAY_URL = 'https://w8d3k51hg6.execute-api.us-east-2.amazonaws.com/prod';
+        
+        // Detect environment
+        const isALB = window.location.hostname.includes('classclipscohort3.com');
+        const isApiGateway = window.location.hostname.includes('execute-api');
+        
+        // Set API base URL
+        let API_BASE_URL;
+        if (isALB) {
+            // Accessing through ALB (production) - use ALB URL
+            API_BASE_URL = ALB_API_URL;
+        } else if (isApiGateway) {
+            // Accessing through REST API Gateway - use API Gateway URL for REST calls
+            API_BASE_URL = REST_API_GATEWAY_URL;
+        } else {
+            // Direct EC2 or localhost - use same origin
+            API_BASE_URL = window.location.origin;
+        }
+        
+        console.log('API Base URL:', API_BASE_URL);
+        console.log('Is API Gateway:', isApiGateway);
+
+        // Set version timestamp - shows when page was loaded
+        (function() {
+            const now = new Date();
+            const timestamp = now.toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            });
+            document.getElementById('version-timestamp').textContent = timestamp;
+        })();
+
+        // Agent status tracking
+        const agentStatuses = {
+            'Orchestrator': { light: null, text: null, error: null },
+            'Agent2': { light: null, text: null, error: null },
+            'Agent4': { light: null, text: null, error: null },
+            'Agent5': { light: null, text: null, error: null }
+        };
+
+        // Initialize agent status elements
+        ['Orchestrator', 'Agent2', 'Agent4', 'Agent5'].forEach(agent => {
+            agentStatuses[agent] = {
+                light: document.getElementById(`light-${agent.toLowerCase()}`),
+                text: document.getElementById(`status-${agent.toLowerCase()}`),
+                error: document.getElementById(`error-${agent.toLowerCase()}`)
+            };
+        });
+
+        const connectionStatus = document.getElementById('connectionStatus');
+        const form = document.getElementById('processingForm');
+        const submitBtn = document.getElementById('submitBtn');
+
+        // Reset all agent status lights to black
+        function resetAgentStatuses() {
+            ['Orchestrator', 'Agent2', 'Agent4', 'Agent5'].forEach(agent => {
+                const status = agentStatuses[agent];
+                if (status.light && status.text && status.error) {
+                    status.light.className = 'status-light';
+                    status.text.textContent = 'Not triggered';
+                    status.error.textContent = '';
+                    status.error.classList.remove('show');
+                }
+            });
+            // Hide video result
+            const videoResult = document.getElementById('video-result');
+            if (videoResult) {
+                videoResult.style.display = 'none';
+            }
+        }
+
+        // Update agent status based on WebSocket message
+        function updateAgentStatus(agentNumber, status, error, reason, cost, costBreakdown, message) {
+            const agent = agentStatuses[agentNumber];
+            if (!agent) return;
+
+            agent.light.className = 'status-light';
+            agent.text.textContent = 'Not triggered';
+
+            // Hide restart button by default
+            const restartBtn = document.getElementById('restart-agent5-btn');
+            
+            // Format cost display
+            let costText = '';
+            if (cost !== undefined && cost !== null) {
+                costText = ` | Cost: $${cost.toFixed(4)}`;
+                if (costBreakdown && Object.keys(costBreakdown).length > 0) {
+                    const breakdown = Object.entries(costBreakdown)
+                        .map(([section, sectionCost]) => `${section}: $${sectionCost.toFixed(4)}`)
+                        .join(', ');
+                    costText += ` (${breakdown})`;
+                }
+            }
+            
+            if (status === 'starting') {
+                agent.light.classList.add('starting');
+                agent.text.textContent = 'Starting...' + costText;
+            } else if (status === 'processing') {
+                agent.light.classList.add('processing');
+                let statusText = message || 'Processing...';
+                if (message && message.includes('clip')) {
+                    // Show clip progress
+                    const clipMatch = message.match(/(\d+)\/(\d+)/);
+                    if (clipMatch) {
+                        statusText = message;
+                    }
+                }
+                agent.text.textContent = statusText + costText;
+                
+                // Keep restart button visible (users can restart anytime)
+                if (agentNumber === 'Agent5' && restartBtn) {
+                    restartBtn.style.display = 'block';
+                }
+            } else if (status === 'finished') {
+                agent.light.classList.add('finished');
+                agent.text.textContent = 'Finished' + costText;
+                
+                // Keep restart button visible (users can re-render anytime)
+                if (agentNumber === 'Agent5' && restartBtn) {
+                    restartBtn.style.display = 'block';
+                }
+            } else if (status === 'error') {
+                agent.light.classList.add('error');
+                // Always show cost on error if available
+                agent.text.textContent = 'Error' + costText;
+                if (error && reason) {
+                    let errorMsg = `${reason}: ${error}`;
+                    // Add cost info to error message if available
+                    if (cost !== undefined && cost !== null && cost > 0) {
+                        errorMsg += ` | Cost incurred: $${cost.toFixed(4)}`;
+                        if (costBreakdown && Object.keys(costBreakdown).length > 0) {
+                            const breakdown = Object.entries(costBreakdown)
+                                .map(([section, sectionCost]) => `${section}: $${sectionCost.toFixed(4)}`)
+                                .join(', ');
+                            errorMsg += ` (${breakdown})`;
+                        }
+                    }
+                    agent.error.textContent = errorMsg;
+                    agent.error.classList.add('show');
+                    
+                    // Always show restart button for Agent5 (users can attempt restart anytime)
+                    if (agentNumber === 'Agent5' && restartBtn) {
+                        restartBtn.style.display = 'block';
+                    }
+                }
+            }
+        }
+
+        // Connect to WebSocket and return a promise that resolves when ready
+        function connectWebSocket(sessionId) {
+            return new Promise((resolve, reject) => {
+                if (websocket && websocket.readyState === WebSocket.OPEN) {
+                    websocket.close();
+                }
+
+                // Set current session ID immediately
+                currentSessionId = sessionId;
+                console.log(`Setting current session ID to: ${currentSessionId}`);
+
+                // Determine WebSocket URL based on environment
+                let wsUrl, wsPath;
+                if (isALB) {
+                    // ALB (production): use query parameter for session_id
+                    // Format: wss://api.classclipscohort3.com/ws?session_id=xxx
+                    wsUrl = ALB_WS_URL;
+                    wsPath = `${wsUrl}/ws?session_id=${sessionId}`;
+                } else if (isApiGateway) {
+                    // API Gateway: use query parameter for session_id
+                    // Format: wss://.../prod?session_id=xxx
+                    wsUrl = WS_API_GATEWAY_URL;
+                    wsPath = `${wsUrl}?session_id=${sessionId}`;
+                } else {
+                    // Direct connection: use path parameter
+                    wsUrl = API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://');
+                    wsPath = `${wsUrl}/ws/${sessionId}`;
+                }
+                
+                updateConnectionStatus('connecting', 'Connecting...');
+                
+                websocket = new WebSocket(wsPath);
+                let connectionReady = false;
+                const timeout = setTimeout(() => {
+                    if (!connectionReady) {
+                        reject(new Error('WebSocket connection timeout'));
+                    }
+                }, 10000); // 10 second timeout
+
+                websocket.onopen = () => {
+                    console.log('WebSocket opened, waiting for ready confirmation...');
+                    reconnectAttempts = 0;
+                    updateConnectionStatus('connecting', 'WebSocket: Waiting for confirmation...');
+                };
+
+                websocket.onmessage = (event) => {
+                    try {
+                        const message = JSON.parse(event.data);
+                        console.log('WebSocket message received:', message);
+
+                        // Handle connection ready confirmation
+                        if (message.type === 'connection_ready' && message.status === 'connected') {
+                            clearTimeout(timeout);
+                            connectionReady = true;
+                            console.log('WebSocket connection confirmed ready');
+                            updateConnectionStatus('connected', 'WebSocket: Connected');
+                            
+                            // Update current session ID from message if provided (backup)
+                            if (message.sessionID && message.sessionID !== currentSessionId) {
+                                console.log(`Updating current session ID from ${currentSessionId} to ${message.sessionID}`);
+                                currentSessionId = message.sessionID;
+                            }
+                            
+                            // Start ping interval to keep connection alive
+                            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                                // Send ping every 30 seconds to keep connection alive
+                                const pingInterval = setInterval(() => {
+                                    if (websocket && websocket.readyState === WebSocket.OPEN) {
+                                        try {
+                                            websocket.send(JSON.stringify({ type: 'ping' }));
+                                        } catch (e) {
+                                            console.error('Failed to send ping:', e);
+                                            clearInterval(pingInterval);
+                                        }
+                                    } else {
+                                        clearInterval(pingInterval);
+                                    }
+                                }, 30000);
+                                
+                                // Store interval ID so we can clear it on disconnect
+                                websocket._pingInterval = pingInterval;
+                            }
+                            
+                            resolve();
+                            return;
+                        }
+
+                        // Handle pong responses
+                        if (message.type === 'pong') {
+                            return;
+                        }
+
+                        // Handle agent status updates (standardized format)
+                        if (message.agentnumber && message.userID && message.sessionID && message.status) {
+                            // Verify it matches current session
+                            if (message.sessionID === currentSessionId) {
+                                console.log(`Updating status for ${message.agentnumber}: ${message.status}`);
+                                
+                                // Track Agent5 clip generation progress
+                                if (message.agentnumber === 'Agent5' && message.progress) {
+                                    if (message.progress.stage === 'video_generation') {
+                                        window.agent5ClipsGenerated = message.progress.completed || 0;
+                                        window.agent5TotalClips = message.progress.total || 0;
+                                        console.log(`Agent5 clips: ${window.agent5ClipsGenerated}/${window.agent5TotalClips}`);
+                                    }
+                                }
+                                
+                                updateAgentStatus(
+                                    message.agentnumber,
+                                    message.status,
+                                    message.error,
+                                    message.reason,
+                                    message.cost,
+                                    message.cost_breakdown,
+                                    message.message
+                                );
+                                
+                                // Display video_session data if present (topic, confirmed_facts, generation_script)
+                                // Check if any of these fields exist (including empty objects/arrays)
+                                if (message.hasOwnProperty('topic') || message.hasOwnProperty('confirmed_facts') || message.hasOwnProperty('generation_script')) {
+                                    const videoSessionDataDiv = document.getElementById('videoSessionData');
+                                    const videoSessionDataContent = document.getElementById('videoSessionDataContent');
+                                    
+                                    if (videoSessionDataDiv && videoSessionDataContent) {
+                                        const displayData = {
+                                            topic: message.topic,
+                                            confirmed_facts: message.confirmed_facts,
+                                            generation_script: message.generation_script,
+                                            generated_fields: message.generated_fields || []
+                                        };
+                                        
+                                        videoSessionDataContent.textContent = JSON.stringify(displayData, null, 2);
+                                        videoSessionDataDiv.style.display = 'block';
+                                    }
+                                }
+                                
+                                // If Agent5 or Orchestrator finished and has videoUrl, display it
+                                if ((message.agentnumber === 'Agent5' || message.agentnumber === 'Orchestrator') && 
+                                    message.status === 'finished' && message.videoUrl) {
+                                    console.log('Video URL received:', message.videoUrl);
+                                    const videoResult = document.getElementById('video-result');
+                                    const videoPlayer = document.getElementById('video-player');
+                                    // Use proxy to avoid CORS issues
+                                    const proxyUrl = `/api/video/proxy?url=${encodeURIComponent(message.videoUrl)}`;
+                                    videoPlayer.src = proxyUrl;
+                                    videoResult.style.display = 'block';
+                                    submitBtn.disabled = false;
+                                    submitBtn.textContent = 'Start Processing';
+                                }
+                                
+                                // If Orchestrator finished, re-enable submit button
+                                if (message.agentnumber === 'Orchestrator' && message.status === 'finished') {
+                                    submitBtn.disabled = false;
+                                    submitBtn.textContent = 'Start Processing';
+                                }
+                                
+                                // If Orchestrator error, re-enable submit button
+                                if (message.agentnumber === 'Orchestrator' && message.status === 'error') {
+                                    submitBtn.disabled = false;
+                                    submitBtn.textContent = 'Start Processing';
+                                }
+                            } else {
+                                console.warn(`Message sessionID (${message.sessionID}) does not match current session (${currentSessionId})`);
+                            }
+                        } else {
+                            console.log('Received non-agent message:', message);
+                        }
+                    } catch (e) {
+                        console.error('Error parsing WebSocket message:', e, event.data);
+                    }
+                };
+
+                websocket.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    clearTimeout(timeout);
+                    if (!connectionReady) {
+                        reject(new Error('WebSocket connection error'));
+                    }
+                    updateConnectionStatus('disconnected', 'WebSocket: Error');
+                };
+
+                websocket.onclose = () => {
+                    console.log('WebSocket closed');
+                    clearTimeout(timeout);
+                    
+                    // Clear ping interval if it exists
+                    if (websocket._pingInterval) {
+                        clearInterval(websocket._pingInterval);
+                        websocket._pingInterval = null;
+                    }
+                    
+                    if (!connectionReady) {
+                        reject(new Error('WebSocket closed before ready'));
+                    }
+                    updateConnectionStatus('disconnected', 'WebSocket: Disconnected');
+                    
+                    // Only attempt to reconnect if we have an active session AND we're not in the middle of form submission
+                    // This prevents infinite reconnect loops
+                    if (currentSessionId && reconnectAttempts < maxReconnectAttempts && connectionReady) {
+                        reconnectAttempts++;
+                        console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts})...`);
+                        setTimeout(() => {
+                            connectWebSocket(currentSessionId).catch(err => {
+                                console.error('Reconnection failed:', err);
+                            });
+                        }, reconnectDelay);
+                    }
+                };
+            });
+        }
+
+        // Update connection status display
+        function updateConnectionStatus(status, text) {
+            connectionStatus.className = `connection-status ${status}`;
+            connectionStatus.textContent = text;
+        }
+
+        // Show/hide fields based on agent selection
+        document.getElementById('agentSelection').addEventListener('change', (e) => {
+            const selection = e.target.value;
+            
+            // Hide all groups
+            document.getElementById('fullTestGroup').style.display = 'none';
+            document.getElementById('agent2Group').style.display = 'none';
+            document.getElementById('agent4Group').style.display = 'none';
+            document.getElementById('agent5Group').style.display = 'none';
+            
+            // Show relevant group
+            if (selection === 'Full Test') {
+                document.getElementById('fullTestGroup').style.display = 'block';
+            } else if (selection === 'Agent2') {
+                document.getElementById('agent2Group').style.display = 'block';
+            } else if (selection === 'Agent4') {
+                document.getElementById('agent4Group').style.display = 'block';
+            } else if (selection === 'Agent5') {
+                document.getElementById('agent5Group').style.display = 'block';
+            }
+        });
+        
+        // Trigger initial display
+        document.getElementById('agentSelection').dispatchEvent(new Event('change'));
+
+        // Handle form submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const agentSelection = document.getElementById('agentSelection').value;
+            
+            // Collect form data based on agent selection
+            let formData = {};
+            
+            if (agentSelection === 'Full Test') {
+                formData = {
+                    sessionID: document.getElementById('fullTestSessionID').value,
+                    userID: document.getElementById('fullTestUserID').value
+                };
+            } else if (agentSelection === 'Agent2') {
+                formData = {
+                    userID: document.getElementById('agent2UserID').value,
+                    sessionID: document.getElementById('agent2SessionID').value
+                };
+            } else if (agentSelection === 'Agent4') {
+                formData = {
+                    userID: document.getElementById('agent4UserID').value,
+                    sessionID: document.getElementById('agent4SessionID').value,
+                    voice: document.getElementById('agent4Voice').value,
+                    audioOption: document.getElementById('agent4AudioOption').value,
+                    script: document.getElementById('agent4Script').value
+                };
+            } else if (agentSelection === 'Agent5') {
+                formData = {
+                    userID: document.getElementById('agent5UserID').value,
+                    sessionID: document.getElementById('agent5SessionID').value,
+                    supersessionID: document.getElementById('agent5SupersessionID').value
+                };
+            }
+            
+            formData.agent_selection = agentSelection;
+            
+            // Validate required fields
+            if (!formData.sessionID) {
+                alert('Session ID is required');
+                return;
+            }
+            
+            // Reset status lights
+            resetAgentStatuses();
+            
+            // Hide video session data display (if it exists)
+            const videoSessionDataEl = document.getElementById('videoSessionData');
+            if (videoSessionDataEl) {
+                videoSessionDataEl.style.display = 'none';
+            }
+            
+            // Disable submit button
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Starting...';
+
+            try {
+                // Connect to WebSocket first and wait for connection confirmation
+                console.log('Connecting to WebSocket...');
+                await connectWebSocket(formData.sessionID);
+                console.log('WebSocket connected and ready');
+
+                // Small delay to ensure connection is fully established
+                await new Promise(resolve => setTimeout(resolve, 200));
+
+                // Call API endpoint
+                console.log('Calling /api/startprocessing...');
+                const response = await fetch(`${API_BASE_URL}/api/startprocessing`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    console.log('Processing started successfully:', result);
+                    submitBtn.textContent = 'Processing...';
+                } else {
+                    throw new Error(result.message || 'Failed to start processing');
+                }
+            } catch (error) {
+                console.error('Error starting processing:', error);
+                alert(`Error: ${error.message}`);
+                if (websocket) {
+                    websocket.close();
+                }
+                updateConnectionStatus('disconnected', 'WebSocket: Disconnected');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Start Processing';
+            }
+        });
+
+        // Tab switching functionality
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Update tab buttons
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                // Update tab content
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                const tabId = btn.getAttribute('data-tab');
+                document.getElementById(`${tabId}-tab`).classList.add('active');
+            });
+        });
+
+        // ==============================================
+        // Reusable Video Player Component
+        // ==============================================
+        function createVideoPlayer(videoElement, infoElement, downloadElement) {
+            // Set up event listeners for the video element
+            videoElement.addEventListener('loadedmetadata', function() {
+                infoElement.innerHTML = `
+                    <strong>Video Metadata Loaded:</strong><br>
+                    Duration: ${videoElement.duration.toFixed(2)} seconds<br>
+                    Width: ${videoElement.videoWidth}px<br>
+                    Height: ${videoElement.videoHeight}px<br>
+                    Ready State: ${videoElement.readyState}
+                `;
+            });
+
+            videoElement.addEventListener('error', function(e) {
+                infoElement.innerHTML = `
+                    <strong style="color: red;">Error loading video:</strong><br>
+                    Error code: ${videoElement.error ? videoElement.error.code : 'unknown'}<br>
+                    Error message: ${videoElement.error ? videoElement.error.message : 'unknown'}
+                `;
+            });
+
+            videoElement.addEventListener('canplay', function() {
+                infoElement.innerHTML += '<br><strong style="color: #4CAF50;">Video can play!</strong>';
+            });
+
+            // Return a function to load videos
+            return function loadVideo(url) {
+                if (!url) {
+                    infoElement.textContent = 'No video URL provided';
+                    return;
+                }
+                videoElement.src = url;
+                if (downloadElement) {
+                    downloadElement.href = url;
+                }
+                videoElement.load();
+                infoElement.textContent = 'Loading video...';
+            };
+        }
+
+        // Agent 4 Form Submission
+        const agent4Form = document.getElementById('agent4Form');
+        const a4SubmitBtn = document.getElementById('a4-submitBtn');
+
+        // Agent 4 Test Tab elements and handler
+        const a4Status = document.getElementById('a4-status');
+        const a4Results = document.getElementById('a4-results');
+        const a4AudioFiles = document.getElementById('a4-audio-files');
+        const a4ResultJson = document.getElementById('a4-result-json');
+
+        agent4Form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const sessionId = document.getElementById('a4-sessionID').value.trim();
+            const voice = document.getElementById('a4-voice').value;
+            const scriptText = document.getElementById('a4-script').value.trim();
+
+            // Parse and validate script JSON
+            let script;
+            try {
+                script = JSON.parse(scriptText);
+            } catch (err) {
+                alert('Invalid JSON in script field: ' + err.message);
+                return;
+            }
+
+            // Disable button and show processing state
+            a4SubmitBtn.disabled = true;
+            a4SubmitBtn.textContent = 'Generating Audio...';
+            a4Status.className = 'connection-status connecting';
+            a4Status.textContent = 'Processing...';
+            a4Results.style.display = 'none';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/agent4/test`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        script: script,
+                        voice: voice,
+                        audio_option: 'tts'
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    // Display success results
+                    a4Status.className = 'connection-status connected';
+                    a4Status.textContent = 'Complete!';
+                    a4Results.style.display = 'block';
+
+                    // Display audio files
+                    a4AudioFiles.innerHTML = '';
+                    if (result.data && result.data.audio_files) {
+                        result.data.audio_files.forEach(file => {
+                            const fileItem = document.createElement('div');
+                            fileItem.className = 'audio-file-item';
+
+                            // Build audio player HTML if we have a URL or filepath
+                            let audioPlayerHtml = '';
+                            if (file.url) {
+                                audioPlayerHtml = `<audio controls class="audio-player"><source src="${file.url}" type="audio/mpeg">Your browser does not support audio.</audio>`;
+                            } else if (file.filepath) {
+                                // For local files, we need to serve them through an endpoint
+                                const encodedPath = encodeURIComponent(file.filepath);
+                                audioPlayerHtml = `<audio controls class="audio-player"><source src="${API_BASE_URL}/api/audio/local?path=${encodedPath}" type="audio/mpeg">Your browser does not support audio.</audio>`;
+                            }
+
+                            fileItem.innerHTML = `
+                                <h4>${file.part.charAt(0).toUpperCase() + file.part.slice(1)}</h4>
+                                <div class="audio-file-meta">
+                                    Duration: ${file.duration}s |
+                                    Cost: $${file.cost?.toFixed(4) || '0.0000'} |
+                                    Characters: ${file.character_count || 'N/A'}
+                                </div>
+                                ${audioPlayerHtml}
+                            `;
+                            a4AudioFiles.appendChild(fileItem);
+                        });
+                    }
+
+                    // Display full JSON result
+                    a4ResultJson.textContent = JSON.stringify(result, null, 2);
+                } else {
+                    throw new Error(result.error || result.detail || 'Agent 4 processing failed');
+                }
+            } catch (error) {
+                console.error('Agent 4 error:', error);
+                a4Status.className = 'connection-status disconnected';
+                a4Status.textContent = `Error: ${error.message}`;
+                a4Results.style.display = 'block';
+                a4ResultJson.textContent = `Error: ${error.message}`;
+                a4AudioFiles.innerHTML = '';
+            } finally {
+                a4SubmitBtn.disabled = false;
+                a4SubmitBtn.textContent = 'Generate Audio';
+            }
+        });
+
+        // Agent 5 Form Submission
+        const agent5Form = document.getElementById('agent5Form');
+        const a5SubmitBtn = document.getElementById('a5-submitBtn');
+        const a5Status = document.getElementById('a5-status');
+        const a5Results = document.getElementById('a5-results');
+        const a5VideoPlayer = document.getElementById('a5-video-player');
+        const a5ResultJson = document.getElementById('a5-result-json');
+        const a5VideoInfo = document.getElementById('a5-video-info');
+        const a5VideoDownload = document.getElementById('a5-video-download');
+        let a5Websocket = null;
+
+        // Create reusable video player for Agent 5
+        const loadA5Video = createVideoPlayer(a5VideoPlayer, a5VideoInfo, a5VideoDownload);
+
+        agent5Form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const pipelineDataText = document.getElementById('a5-pipeline-data').value.trim();
+
+            // Parse and validate pipeline data JSON
+            let pipelineData;
+            try {
+                pipelineData = JSON.parse(pipelineDataText);
+            } catch (err) {
+                alert('Invalid JSON in pipeline data field: ' + err.message);
+                return;
+            }
+
+            // Extract base_scene and build scene configurations for all 4 parts
+            // base_scene now uses flat structure: style, setting, teacher, students (all strings)
+            const baseScene = pipelineData.agent_2_data.base_scene;
+            const script = pipelineData.agent_2_data.script;
+            const audioFiles = pipelineData.agent_4_data.audio_files;
+            const parts = ['hook', 'concept', 'process', 'conclusion'];
+
+            // Build scene configurations
+            // For compatibility with /api/scene/generate, we'll use base_scene strings directly
+            const sceneConfigs = parts.map(part => {
+                const scriptPart = script[part];
+                const audioFile = audioFiles.find(a => a.part === part);
+
+                return {
+                    visual: {
+                        style: baseScene.style || "Pixar/Disney-quality 3D animation",
+                        setting: baseScene.setting || "Modern elementary classroom",
+                        teacher: baseScene.teacher || "Ms. Rivera, animated teacher",
+                        students: baseScene.students || "Diverse animated children",
+                        duration: scriptPart.duration,
+                        scene_text: scriptPart.scene_text || scriptPart.text,
+                        scene_action: scriptPart.scene_action || scriptPart.visual_prompt,
+                        previous_scene_context: scriptPart.previous_scene_context
+                    },
+                    audio: {
+                        part: audioFile.part,
+                        url: audioFile.url,
+                        duration: audioFile.duration
+                    }
+                };
+            });
+
+            // Disable button and show processing state
+            a5SubmitBtn.disabled = true;
+            a5SubmitBtn.textContent = 'Generating 4 Scenes in Parallel...';
+            a5Status.className = 'connection-status connecting';
+            a5Status.textContent = 'Generating 4 scenes in parallel... This will take 8-12 minutes total.';
+            a5Results.style.display = 'none';
+
+            try {
+                // Generate all 4 scenes in parallel
+                a5Status.textContent = 'Generating hook, concept, process, and conclusion scenes in parallel...';
+
+                const scenePromises = sceneConfigs.map(async (config, index) => {
+                    const part = parts[index];
+                    try {
+                        const response = await fetch(`${API_BASE_URL}/api/scene/generate`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                text: config.visual.scene_text,
+                                duration: config.visual.duration,
+                                visual_prompt: config.visual.scene_action,
+                                base_scene: {
+                                    style: config.visual.style,
+                                    setting: config.visual.setting,
+                                    teacher: config.visual.teacher,
+                                    students: config.visual.students
+                                },
+                                previous_scene_context: config.visual.previous_scene_context
+                            })
+                        });
+
+                        const result = await response.json();
+
+                        if (!response.ok || !result.success) {
+                            throw new Error(`Scene ${part} failed: ${result.error || 'Unknown error'}`);
+                        }
+
+                        return {
+                            part: part,
+                            videoUrl: result.data.videoUrl,
+                            duration: result.duration,
+                            cost: result.cost
+                        };
+                    } catch (err) {
+                        throw new Error(`Scene ${part} error: ${err.message}`);
+                    }
+                });
+
+                const sceneResults = await Promise.all(scenePromises);
+
+                // Calculate totals
+                const totalDuration = sceneResults.reduce((sum, r) => sum + r.duration, 0);
+                const totalCost = sceneResults.reduce((sum, r) => sum + r.cost, 0);
+
+                a5Status.textContent = 'All 4 scenes generated! Now composing final video...';
+
+                // Concatenate the 4 scene videos
+                const videoUrls = sceneResults.map(r => r.videoUrl);
+                const concatResponse = await fetch(`${API_BASE_URL}/api/videos/concatenate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        video_urls: videoUrls
+                    })
+                });
+
+                const concatResult = await concatResponse.json();
+
+                if (!concatResponse.ok || !concatResult.success) {
+                    throw new Error(`Video concatenation failed: ${concatResult.error || 'Unknown error'}`);
+                }
+
+                a5Status.className = 'connection-status connected';
+                a5Status.textContent = `Complete! 4 scenes generated and composed | Total Duration: ${totalDuration.toFixed(1)}s | Total Cost: $${totalCost.toFixed(4)}`;
+                a5Results.style.display = 'block';
+
+                // Display final composed video
+                a5VideoPlayer.style.display = 'block';
+                loadA5Video(concatResult.data.videoUrl);
+
+                // Display generation summary
+                const summaryInfo = `
+<strong>Generation Summary</strong>
+Mode: Scene Generator (Minimax) + Composition
+Scenes Generated: 4 (${parts.join(', ')})
+Total Duration: ${totalDuration.toFixed(1)}s
+Total Cost: $${totalCost.toFixed(4)}
+
+<strong>Individual Scene Results:</strong>
+${sceneResults.map(r => `${r.part}: ${r.duration.toFixed(1)}s, $${r.cost.toFixed(4)}`).join('\n')}
+
+<strong>Final Video:</strong>
+${concatResult.data.videoUrl}
+Duration: ${concatResult.duration.toFixed(1)}s
+`;
+                a5ResultJson.innerHTML = '<pre>' + summaryInfo + '</pre>';
+            } catch (error) {
+                console.error('Agent 5 error:', error);
+                a5Status.className = 'connection-status disconnected';
+                a5Status.textContent = `Error: ${error.message}`;
+                a5Results.style.display = 'block';
+                a5ResultJson.textContent = `Error: ${error.message}`;
+                a5VideoPlayer.style.display = 'none';
+            } finally {
+                a5SubmitBtn.disabled = false;
+                a5SubmitBtn.textContent = 'Generate AI Video';
+            }
+        });
+
+        // Video Test Tab functionality
+        const videoTestPlayer = document.getElementById('test-video-player');
+        const videoUrlInput = document.getElementById('video-url-input');
+        const loadVideoBtn = document.getElementById('load-video-btn');
+        const videoTestInfo = document.getElementById('video-test-info');
+        const videoTestDownload = document.getElementById('video-test-download');
+
+        // Create reusable video player for Video Test tab
+        const loadTestVideo = createVideoPlayer(videoTestPlayer, videoTestInfo, videoTestDownload);
+
+        loadVideoBtn.addEventListener('click', function() {
+            const url = videoUrlInput.value.trim();
+            if (url) {
+                loadTestVideo(url);
+            } else {
+                videoTestInfo.textContent = 'Please enter a valid URL';
+            }
+        });
+
+        // ==============================================
+        // Scene Test Tab functionality
+        // ==============================================
+        const sceneTestForm = document.getElementById('sceneTestForm');
+        const sceneSubmitBtn = document.getElementById('scene-submitBtn');
+        const sceneStatus = document.getElementById('scene-status');
+        const sceneResults = document.getElementById('scene-results');
+        const sceneVideoPlayer = document.getElementById('scene-video-player');
+        const sceneVideoInfo = document.getElementById('scene-video-info');
+        const sceneVideoDownload = document.getElementById('scene-video-download');
+        const sceneResultJson = document.getElementById('scene-result-json');
+
+        // Create video player for scene test
+        const loadSceneVideo = createVideoPlayer(sceneVideoPlayer, sceneVideoInfo, sceneVideoDownload);
+
+        sceneTestForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const sceneBaseText = document.getElementById('scene-base').value.trim();
+
+            if (!sceneBaseText) {
+                alert('Please provide the scene configuration JSON');
+                return;
+            }
+
+            // Parse scene configuration JSON
+            let sceneConfig = null;
+            try {
+                sceneConfig = JSON.parse(sceneBaseText);
+            } catch (err) {
+                alert('Invalid JSON in Scene Configuration field: ' + err.message);
+                return;
+            }
+
+            // Extract values from the visual section
+            const sceneText = sceneConfig.visual?.scene_text;
+            const sceneDuration = sceneConfig.visual?.duration;
+            const scenePrompt = sceneConfig.visual?.scene_action;
+            const scenePreviousContext = sceneConfig.visual?.previous_scene_context;
+
+            if (!sceneText || !scenePrompt || !sceneDuration) {
+                alert('JSON must include visual.scene_text, visual.duration, and visual.scene_action');
+                return;
+            }
+
+            // Disable button and show processing state
+            sceneSubmitBtn.disabled = true;
+            sceneSubmitBtn.textContent = 'Generating Scene...';
+            sceneStatus.className = 'connection-status connecting';
+            const numClips = Math.ceil(sceneDuration / 5);
+            sceneStatus.textContent = `Generating ${numClips} video clips sequentially for continuity... Clip 1 uses text-to-video, clips 2+ use image-to-video. This will take ${numClips * 2}-${numClips * 3} minutes.`;
+            sceneResults.style.display = 'none';
+            sceneVideoPlayer.style.display = 'none';
+
+            try {
+                // Extract base_scene from visual config (support both old nested and new flat structure)
+                let baseScene = null;
+                if (sceneConfig.visual) {
+                    // Check if it's the new flat structure (style, setting, teacher, students as strings)
+                    if (sceneConfig.visual.style && typeof sceneConfig.visual.style === 'string') {
+                        baseScene = {
+                            style: sceneConfig.visual.style,
+                            setting: sceneConfig.visual.setting || "",
+                            teacher: sceneConfig.visual.teacher || "",
+                            students: sceneConfig.visual.students || ""
+                        };
+                    } else if (sceneConfig.visual.characters) {
+                        // Old nested structure - extract to flat structure
+                        baseScene = {
+                            style: sceneConfig.visual.style || "",
+                            setting: sceneConfig.visual.setting?.location || sceneConfig.visual.setting || "",
+                            teacher: sceneConfig.visual.characters?.teacher || "",
+                            students: sceneConfig.visual.characters?.students || ""
+                        };
+                    }
+                }
+                
+                const requestBody = {
+                    text: sceneText,
+                    duration: sceneDuration,
+                    visual_prompt: scenePrompt,
+                    base_scene: baseScene
+                };
+
+                if (scenePreviousContext) {
+                    requestBody.previous_scene_context = scenePreviousContext;
+                }
+
+                const response = await fetch(`${API_BASE_URL}/api/scene/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    // Display success results
+                    sceneStatus.className = 'connection-status connected';
+                    sceneStatus.textContent = `Complete! ${result.data.numClips} clips stitched | Duration: ${result.duration.toFixed(1)}s | Cost: $${result.cost.toFixed(4)}`;
+                    sceneResults.style.display = 'block';
+
+                    // Display video
+                    if (result.data.videoUrl) {
+                        sceneVideoPlayer.style.display = 'block';
+                        loadSceneVideo(result.data.videoUrl);
+                    }
+
+                    // Display generation summary
+                    const summaryInfo = `
+<strong>Scene Generation Summary</strong>
+Text: ${result.data.text}
+Target Duration: ${result.data.targetDuration}s
+Actual Duration: ${result.data.actualDuration}s
+Number of Clips: ${result.data.numClips}
+Model: ${result.data.model}
+Cost: $${result.cost.toFixed(4)}
+Generation Time: ${result.duration.toFixed(1)}s
+
+<strong>Response Data:</strong>
+${JSON.stringify(result, null, 2)}`;
+                    sceneResultJson.innerHTML = '<pre>' + summaryInfo + '</pre>';
+                } else {
+                    throw new Error(result.error || result.detail || 'Scene generation failed');
+                }
+
+            } catch (error) {
+                console.error('Scene test error:', error);
+                sceneStatus.className = 'connection-status disconnected';
+                sceneStatus.textContent = `Error: ${error.message}`;
+                sceneResults.style.display = 'block';
+                sceneResultJson.textContent = `Error: ${error.message}`;
+                sceneVideoPlayer.style.display = 'none';
+            } finally {
+                sceneSubmitBtn.disabled = false;
+                sceneSubmitBtn.textContent = 'Generate Scene';
+            }
+        });
+        // Track Agent5 clip generation progress
+        window.agent5ClipsGenerated = 0;
+        window.agent5TotalClips = 0;
+        
+        // Function to kill all active agents
+        async function killAllAgents() {
+            const killBtn = document.getElementById('kill-all-agents-btn');
+            
+            if (!confirm('Are you sure you want to kill all active agents? This will stop all running agent processes.')) {
+                return;
+            }
+            
+            try {
+                killBtn.disabled = true;
+                killBtn.textContent = 'Killing Agents...';
+                
+                const response = await fetch(`${API_BASE_URL}/api/kill-all-agents`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    alert(`Successfully killed ${data.cancelled_count} active agent(s)`);
+                    
+                    // Reset all agent statuses
+                    resetAgentStatuses();
+                    
+                    // Re-enable submit button if it was disabled
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Start Processing';
+                } else {
+                    throw new Error(data.message || 'Failed to kill agents');
+                }
+            } catch (error) {
+                console.error('Error killing agents:', error);
+                alert(`Failed to kill agents: ${error.message}`);
+            } finally {
+                killBtn.disabled = false;
+                killBtn.textContent = 'Kill All Active Agents';
+            }
+        }
+
+        // Attach event listener to kill all agents button
+        document.getElementById('kill-all-agents-btn').addEventListener('click', killAllAgents);
+
+        // Attach event listener to restart Agent5 button
+        document.getElementById('restart-agent5-btn').addEventListener('click', restartAgent5FromConcat);
+
+        // Function to restart Agent5 from concatenation
+        async function restartAgent5FromConcat() {
+            const restartBtn = document.getElementById('restart-agent5-btn');
+            const userID = document.getElementById('fullTestUserID').value;
+            const sessionID = document.getElementById('fullTestSessionID').value;
+            
+            if (!userID || !sessionID) {
+                alert('User ID and Session ID are required');
+                return;
+            }
+            
+            try {
+                restartBtn.disabled = true;
+                restartBtn.textContent = '🔄 Restarting...';
+                
+                // Keep button visible but disabled during restart
+                restartBtn.style.display = 'block';
+                
+                // Clear Agent5 error message
+                const agent5Error = document.getElementById('error-agent5');
+                agent5Error.classList.remove('show');
+                
+                // Call restart endpoint
+                const response = await fetch(`${API_BASE_URL}/api/restart-agent5-concat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        userID: userID,
+                        sessionID: sessionID
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to restart Agent5');
+                }
+                
+                console.log('Agent5 restart initiated:', data);
+                
+                // Update status to show restart in progress
+                updateAgentStatus('Agent5', 'processing', null, null);
+                
+                // Re-enable button after initiating
+                restartBtn.disabled = false;
+                restartBtn.textContent = '🔄 Restart from Concatenation';
+                
+            } catch (error) {
+                console.error('Error restarting Agent5:', error);
+                alert(`Failed to restart Agent5: ${error.message}`);
+                
+                // Re-enable button on error
+                restartBtn.style.display = 'block';
+                restartBtn.disabled = false;
+                restartBtn.textContent = '🔄 Restart from Concatenation';
+            }
+        }
+    </script>
+</body>
+</html>
+
