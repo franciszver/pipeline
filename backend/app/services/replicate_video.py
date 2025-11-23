@@ -32,16 +32,35 @@ class ReplicateVideoService:
         import logging
         logger = logging.getLogger(__name__)
         
-        settings = get_settings()
-        self.api_key = api_key or settings.REPLICATE_API_KEY
-
+        # If api_key is provided, use it; otherwise get from orchestrator (prioritizes .env for local dev)
+        if api_key:
+            self.api_key = api_key
+        else:
+            # Use orchestrator's function to get key (prioritizes .env for local dev)
+            from app.services.orchestrator import _get_replicate_api_key
+            self.api_key = _get_replicate_api_key()
+        
         if not self.api_key:
             logger.error("REPLICATE_API_KEY not configured in ReplicateVideoService")
             raise ValueError("REPLICATE_API_KEY not configured")
+        
+        # Strip whitespace and quotes to prevent authentication issues
+        self.api_key = self.api_key.strip()
+        # Remove surrounding quotes if present (common .env file issue)
+        if (self.api_key.startswith('"') and self.api_key.endswith('"')) or \
+           (self.api_key.startswith("'") and self.api_key.endswith("'")):
+            self.api_key = self.api_key[1:-1].strip()
+
+        # Validate key format (should start with r8_)
+        if not self.api_key.startswith("r8_"):
+            key_preview = f"{self.api_key[:5]}...{self.api_key[-3:]}" if len(self.api_key) > 8 else f"{self.api_key[:5]}..."
+            logger.error(f"REPLICATE_API_KEY has invalid format! Expected to start with 'r8_', preview: {key_preview}, length: {len(self.api_key)})")
+            raise ValueError(f"REPLICATE_API_KEY has invalid format. Expected to start with 'r8_'")
 
         # Create Replicate client with explicit API token (like other agents do)
         self.client = replicate.Client(api_token=self.api_key)
-        logger.info(f"ReplicateVideoService initialized with API key (starts with: {self.api_key[:5]}..., length: {len(self.api_key)})")
+        key_preview = f"{self.api_key[:5]}...{self.api_key[-3:]}" if len(self.api_key) > 8 else f"{self.api_key[:5]}..."
+        logger.info(f"ReplicateVideoService initialized with API key (preview: {key_preview}, length: {len(self.api_key)})")
 
     async def generate_video(
         self,
@@ -121,8 +140,27 @@ class ReplicateVideoService:
             if seed is not None:
                 input_data["seed"] = seed
 
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Log the API key being used (for debugging authentication errors)
+        if self.api_key:
+            key_preview = f"{self.api_key[:5]}...{self.api_key[-3:]}" if len(self.api_key) > 8 else f"{self.api_key[:5]}..."
+            logger.info(f"Using REPLICATE_API_KEY for model {model_id}: {key_preview} (length: {len(self.api_key)})")
+        else:
+            logger.error("REPLICATE_API_KEY is None or empty when calling Replicate API")
+
         # Run the model using the client instance (explicit API token)
-        output = self.client.run(model_id, input=input_data)
+        try:
+            output = self.client.run(model_id, input=input_data)
+        except Exception as e:
+            # Log the key again on error for debugging
+            if self.api_key:
+                key_preview = f"{self.api_key[:5]}...{self.api_key[-3:]}" if len(self.api_key) > 8 else f"{self.api_key[:5]}..."
+                logger.error(f"Replicate API error with key: {key_preview} (length: {len(self.api_key)}, starts with: {self.api_key[:5]}...)")
+            else:
+                logger.error("Replicate API error with key: None or empty")
+            raise
 
         # Handle different output formats
         if isinstance(output, str):
@@ -175,6 +213,9 @@ class ReplicateVideoService:
         """
         Run image-to-video prediction synchronously.
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         if "minimax" in model_id:
             input_data = {
                 "prompt": prompt,
@@ -198,8 +239,24 @@ class ReplicateVideoService:
             if seed is not None:
                 input_data["seed"] = seed
 
+        # Log the API key being used (for debugging authentication errors)
+        if self.api_key:
+            key_preview = f"{self.api_key[:5]}...{self.api_key[-3:]}" if len(self.api_key) > 8 else f"{self.api_key[:5]}..."
+            logger.info(f"Using REPLICATE_API_KEY for image-to-video model {model_id}: {key_preview} (length: {len(self.api_key)})")
+        else:
+            logger.error("REPLICATE_API_KEY is None or empty when calling Replicate API for image-to-video")
+
         # Run the model using the client instance (explicit API token)
-        output = self.client.run(model_id, input=input_data)
+        try:
+            output = self.client.run(model_id, input=input_data)
+        except Exception as e:
+            # Log the key again on error for debugging
+            if self.api_key:
+                key_preview = f"{self.api_key[:5]}...{self.api_key[-3:]}" if len(self.api_key) > 8 else f"{self.api_key[:5]}..."
+                logger.error(f"Replicate API error (image-to-video) with key: {key_preview} (length: {len(self.api_key)}, starts with: {self.api_key[:5]}...)")
+            else:
+                logger.error("Replicate API error (image-to-video) with key: None or empty")
+            raise
 
         # Handle output format
         if isinstance(output, str):

@@ -250,18 +250,14 @@ async def agent_4_process(
         }
         await create_status_json("4", "processing", status_data)
 
-        # Get OpenAI API key from AWS Secrets Manager
-        try:
-            from app.services.secrets import get_secret
-            openai_key = get_secret("pipeline/openai-api-key")
-            logger.debug(f"Retrieved OPENAI_API_KEY from AWS Secrets Manager for Agent4")
-        except Exception as e:
-            logger.warning(f"Could not retrieve OPENAI_API_KEY from Secrets Manager: {e}, AudioPipelineAgent will use fallback")
-            openai_key = None
+        # Get OpenAI API key using the orchestrator's function (prioritizes .env for local dev)
+        from app.services.orchestrator import _get_openai_api_key
+        openai_key = _get_openai_api_key()
         
         # Create AudioPipelineAgent instance with explicit API key
+        # If None, AudioPipelineAgent will try to get it from .env or Secrets Manager
         audio_agent = AudioPipelineAgent(
-            api_key=openai_key,  # Explicitly pass key from Secrets Manager
+            api_key=openai_key,  # Pass key from orchestrator (handles .env priority)
             db=None,  # No DB needed for TTS
             storage_service=storage_service,
             websocket_manager=websocket_manager
@@ -336,7 +332,8 @@ async def agent_4_process(
             agent_2_data = json.loads(response['Body'].read().decode('utf-8'))
             logger.info(f"Agent4 loaded agent_2_data.json from S3: {s3_key_agent2}")
         except Exception as e:
-            logger.warning(f"Agent4 could not load agent_2_data.json from S3: {e}")
+            # This is expected if Agent2 hasn't run yet - not a critical error
+            logger.debug(f"Agent4 could not load agent_2_data.json from S3 (expected if Agent2 hasn't run): {e}")
 
         # Upload audio files to S3 and build agent_4_data structure
         audio_files_output = []

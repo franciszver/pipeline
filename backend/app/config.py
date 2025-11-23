@@ -2,8 +2,23 @@
 Configuration settings for the Gauntlet Pipeline backend.
 """
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from functools import lru_cache
 from typing import Optional
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env file first, overriding any existing environment variables
+# This ensures .env takes priority for local development
+# Use pathlib.Path for cross-platform path handling, convert to string for load_dotenv
+env_path = Path(__file__).parent.parent.parent / ".env"
+if env_path.exists():
+    load_dotenv(str(env_path), override=True)
+else:
+    # Also try loading from backend/.env if root .env doesn't exist
+    backend_env_path = Path(__file__).parent.parent / ".env"
+    if backend_env_path.exists():
+        load_dotenv(str(backend_env_path), override=True)
 
 
 class Settings(BaseSettings):
@@ -22,6 +37,32 @@ class Settings(BaseSettings):
     # External Services
     REPLICATE_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
+    
+    @field_validator('REPLICATE_API_KEY', mode='before')
+    @classmethod
+    def clean_replicate_api_key(cls, v):
+        """Strip whitespace and quotes from REPLICATE_API_KEY."""
+        if not v:
+            return ""
+        if isinstance(v, str):
+            v = v.strip()
+            # Remove surrounding quotes if present (common .env file issue)
+            if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                v = v[1:-1].strip()
+        return v
+    
+    @field_validator('OPENAI_API_KEY', mode='before')
+    @classmethod
+    def clean_openai_api_key(cls, v):
+        """Strip whitespace and quotes from OPENAI_API_KEY."""
+        if not v:
+            return ""
+        if isinstance(v, str):
+            v = v.strip()
+            # Remove surrounding quotes if present
+            if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                v = v[1:-1].strip()
+        return v
 
     # AWS S3
     AWS_ACCESS_KEY_ID: str = ""

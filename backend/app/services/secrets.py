@@ -24,6 +24,9 @@ def get_secret(secret_name: str) -> str:
     """
     Retrieve a secret from AWS Secrets Manager with caching.
     
+    For local development (DEBUG=True): checks .env first, then AWS Secrets Manager
+    For production: checks AWS Secrets Manager first, then .env
+    
     Secrets are cached globally with a TTL of 1 hour to minimize API calls.
     Thread-safe implementation using locks.
     
@@ -42,6 +45,21 @@ def get_secret(secret_name: str) -> str:
         >>> api_key = get_secret("pipeline/openrouter-api-key")
     """
     global _secret_cache
+    
+    # Map secret names to environment variable names
+    secret_to_env = {
+        "pipeline/openai-api-key": "OPENAI_API_KEY",
+        "pipeline/replicate-api-key": "REPLICATE_API_KEY",
+        "pipeline/openrouter-api-key": "OPENROUTER_API_KEY",
+    }
+    
+    # Always prioritize .env file first (takes precedence over Secrets Manager)
+    if secret_name in secret_to_env:
+        env_var_name = secret_to_env[secret_name]
+        env_value = getattr(settings, env_var_name, None)
+        if env_value and env_value.strip():
+            logger.debug(f"Using {env_var_name} from .env file for secret '{secret_name}'")
+            return env_value.strip()
     
     # Check cache first
     with _cache_lock:
@@ -95,9 +113,17 @@ def get_secret(secret_name: str) -> str:
         
         # Log as warning (not error) since fallback to .env is expected in local dev
         if error_code == 'AccessDeniedException':
-            logger.warning(f"Secrets Manager access denied for '{secret_name}' (expected in local dev, will use .env fallback): {error_msg}")
+            logger.debug(f"Secrets Manager access denied for '{secret_name}' (expected in local dev, will use .env fallback): {error_msg}")
         else:
-            logger.warning(f"Failed to retrieve secret '{secret_name}': {error_code} - {error_msg} (will use .env fallback)")
+            logger.debug(f"Failed to retrieve secret '{secret_name}' from Secrets Manager: {error_code} - {error_msg} (will use .env fallback)")
+        
+        # Try .env as fallback (shouldn't happen since we check .env first, but just in case)
+        if secret_name in secret_to_env:
+            env_var_name = secret_to_env[secret_name]
+            env_value = getattr(settings, env_var_name, None)
+            if env_value and env_value.strip():
+                logger.debug(f"Using {env_var_name} from .env file (fallback) for secret '{secret_name}'")
+                return env_value.strip()
         
         # Check if we have a stale cached value (use it as fallback)
         with _cache_lock:
@@ -134,8 +160,8 @@ def clear_cache(secret_name: Optional[str] = None) -> None:
         if secret_name:
             if secret_name in _secret_cache:
                 del _secret_cache[secret_name]
-                logger.debug(f"Cleared cache for secret '{secret_name}'")
+                logger.info(f"Cleared cache for secret '{secret_name}'")
         else:
             _secret_cache.clear()
-            logger.debug("Cleared all secret caches")
+            logger.info("Cleared all secret caches")
 

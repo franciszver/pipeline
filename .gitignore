@@ -133,3 +133,4 @@ replace-secrets-in-history.ps1
 replace-secrets.bat
 replace-secrets.sh
 docs/backend/TEST_UI_ENV_SETUP.md
+backend/start-server.ps1

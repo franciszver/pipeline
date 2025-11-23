@@ -1826,9 +1826,11 @@ async def regenerate_segment(
                 from app.database import SessionLocal
                 background_db = SessionLocal()
                 try:
-                    # Get API keys
+                    # Get API keys - use orchestrator functions to prioritize .env for local dev
+                    from app.services.orchestrator import _get_replicate_api_key
+                    replicate_key = _get_replicate_api_key()
+                    # For openrouter, use get_secret (which already prioritizes .env in DEBUG mode)
                     openrouter_key = get_secret("pipeline/openrouter-api-key")
-                    replicate_key = get_secret("pipeline/replicate-api-key")
                     
                     # Instantiate agent
                     agent = StoryImageGeneratorAgent(

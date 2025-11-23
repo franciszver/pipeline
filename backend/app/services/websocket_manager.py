@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
-from app.models.database import WebSocketConnection as WSConnectionModel
+from app.models.database import WebSocketConnection as WSConnectionModel, Session as SessionModel
 
 logger = logging.getLogger(__name__)
 
@@ -47,33 +47,46 @@ class WebSocketManager:
             connection_id = f"ws_{secrets.token_urlsafe(16)}"
         
         # Register connection in database for cross-worker communication
-        # Note: This may fail if session_id doesn't exist in sessions table (e.g., in scaffoldtest)
-        # We handle this gracefully and continue with in-memory tracking
+        # Only register if the session exists in the database (skip for scaffoldtest or test sessions)
         db: Session = SessionLocal()
+        session_exists = False
         try:
-            # Check if connection already exists
-            existing = db.query(WSConnectionModel).filter(
-                WSConnectionModel.connection_id == connection_id
-            ).first()
+            # Check if session exists in database first
+            session_exists = db.query(SessionModel).filter(
+                SessionModel.id == session_id
+            ).first() is not None
             
-            if not existing:
-                ws_conn = WSConnectionModel(
-                    session_id=session_id,
-                    connection_id=connection_id,
-                    connected_at=datetime.utcnow()
-                )
-                db.add(ws_conn)
-                db.commit()
-                logger.info(f"Registered WebSocket connection {connection_id} for session {session_id} in database")
+            if not session_exists:
+                # Session doesn't exist - skip database registration but continue with in-memory tracking
+                logger.debug(f"Session {session_id} not found in database, skipping WebSocket connection registration (using in-memory only)")
+            else:
+                # Session exists - proceed with database registration
+                # Check if connection already exists
+                existing = db.query(WSConnectionModel).filter(
+                    WSConnectionModel.connection_id == connection_id
+                ).first()
+                
+                if not existing:
+                    ws_conn = WSConnectionModel(
+                        session_id=session_id,
+                        connection_id=connection_id,
+                        connected_at=datetime.utcnow()
+                    )
+                    db.add(ws_conn)
+                    db.commit()
+                    logger.info(f"Registered WebSocket connection {connection_id} for session {session_id} in database")
         except Exception as e:
             # Log but don't fail - in-memory tracking will still work
-            # This can happen if session_id doesn't exist in sessions table (e.g., scaffoldtest)
             logger.warning(f"Failed to register WebSocket connection in database (non-critical): {e}")
             db.rollback()
         finally:
             db.close()
         
-        logger.info(f"WebSocket connected for session {session_id}. Total connections for this session: {len(self.active_connections[session_id])}")
+        # Log connection status
+        if session_exists:
+            logger.info(f"WebSocket connected for session {session_id}. Total connections for this session: {len(self.active_connections[session_id])}")
+        else:
+            logger.info(f"WebSocket connected for session {session_id} (in-memory only). Total connections for this session: {len(self.active_connections[session_id])}")
 
     async def disconnect(self, websocket: WebSocket, session_id: str, connection_id: Optional[str] = None):
         """

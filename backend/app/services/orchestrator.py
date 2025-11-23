@@ -36,50 +36,78 @@ settings = get_settings()
 
 def _get_openai_api_key() -> Optional[str]:
     """
-    Get OPENAI_API_KEY from AWS Secrets Manager with fallback to settings.
+    Get OPENAI_API_KEY, always prioritizing .env file first, then AWS Secrets Manager.
+    
+    This ensures .env file takes precedence for local development and testing.
     
     Returns:
         OpenAI API key string, or None if not found
     """
+    # Always check .env file first (takes precedence)
+    key = settings.OPENAI_API_KEY
+    if key and key.strip():
+        logger.debug("Using OPENAI_API_KEY from .env file")
+        return key
+    
+    # Fallback to AWS Secrets Manager if .env doesn't have it
     try:
         from app.services.secrets import get_secret
-        return get_secret("pipeline/openai-api-key")
+        key = get_secret("pipeline/openai-api-key")
+        if key:
+            logger.debug("Using OPENAI_API_KEY from AWS Secrets Manager (fallback)")
+            return key
     except Exception as e:
-        # This is expected in local development - fallback to .env
-        logger.debug(f"Could not retrieve OPENAI_API_KEY from Secrets Manager: {e}, falling back to .env file")
-        key = settings.OPENAI_API_KEY
-        if not key:
-            logger.warning(
-                "OPENAI_API_KEY not set in Secrets Manager or .env file - "
-                "image and audio generation will fail."
-            )
-        else:
-            logger.debug("Using OPENAI_API_KEY from .env file")
-        return key
+        logger.debug(f"Could not retrieve OPENAI_API_KEY from Secrets Manager: {e}")
+    
+    logger.warning(
+        "OPENAI_API_KEY not set in .env file or Secrets Manager - "
+        "image and audio generation will fail."
+    )
+    return None
 
 
 def _get_replicate_api_key() -> Optional[str]:
     """
-    Get REPLICATE_API_KEY from AWS Secrets Manager with fallback to settings.
+    Get REPLICATE_API_KEY, always prioritizing .env file first, then AWS Secrets Manager.
+    
+    This ensures .env file takes precedence for local development and testing.
     
     Returns:
-        Replicate API key string, or None if not found
+        Replicate API key string (cleaned of whitespace and quotes), or None if not found
     """
+    def clean_api_key(key: Optional[str]) -> Optional[str]:
+        """Clean API key by stripping whitespace and removing surrounding quotes."""
+        if not key:
+            return None
+        key = key.strip()
+        # Remove surrounding quotes if present (common .env file issue)
+        if (key.startswith('"') and key.endswith('"')) or (key.startswith("'") and key.endswith("'")):
+            key = key[1:-1].strip()
+        return key if key else None
+    
+    # Always check .env file first (takes precedence)
+    key = clean_api_key(settings.REPLICATE_API_KEY)
+    if key:
+        logger.debug(f"Using REPLICATE_API_KEY from .env file (length: {len(key)})")
+        return key
+    
+    # Fallback to AWS Secrets Manager if .env doesn't have it
     try:
         from app.services.secrets import get_secret
-        return get_secret("pipeline/replicate-api-key")
+        key = get_secret("pipeline/replicate-api-key")
+        if key:
+            key = clean_api_key(key)
+            if key:
+                logger.debug(f"Using REPLICATE_API_KEY from AWS Secrets Manager (fallback, length: {len(key)})")
+                return key
     except Exception as e:
-        # This is expected in local development - fallback to .env
-        logger.debug(f"Could not retrieve REPLICATE_API_KEY from Secrets Manager: {e}, falling back to .env file")
-        key = settings.REPLICATE_API_KEY
-        if not key:
-            logger.warning(
-                "REPLICATE_API_KEY not set in Secrets Manager or .env file - "
-                "video and image generation will fail."
-            )
-        else:
-            logger.debug("Using REPLICATE_API_KEY from .env file")
-        return key
+        logger.debug(f"Could not retrieve REPLICATE_API_KEY from Secrets Manager: {e}")
+    
+    logger.warning(
+        "REPLICATE_API_KEY not set in .env file or Secrets Manager - "
+        "video and image generation will fail."
+    )
+    return None
 
 
 def _write_errors_json(storage_service: StorageService, session_folder: str, error_data: Dict[str, Any]) -> None:
@@ -1577,8 +1605,12 @@ class VideoGenerationOrchestrator:
 
             # Step 2: Use FFmpeg compositor to stitch videos and add audio
             from app.services.educational_compositor import EducationalCompositor
+            import tempfile
 
-            compositor = EducationalCompositor(work_dir="/tmp/educational_videos")
+            # Use cross-platform temp directory
+            temp_base = tempfile.gettempdir()
+            work_dir = os.path.join(temp_base, "educational_videos")
+            compositor = EducationalCompositor(work_dir=work_dir)
 
             composition_result = await compositor.compose_educational_video(
                 timeline=video_clips,  # Now includes video URLs
@@ -2347,7 +2379,8 @@ class VideoGenerationOrchestrator:
                         f"File may have been cleaned up or path is incorrect."
                     )
                     # Try to list temp directory to debug
-                    temp_dir = os.path.dirname(filepath) if filepath else "/tmp"
+                    import tempfile
+                    temp_dir = os.path.dirname(filepath) if filepath else tempfile.gettempdir()
                     if os.path.exists(temp_dir):
                         try:
                             temp_files = os.listdir(temp_dir)
@@ -2925,7 +2958,10 @@ class VideoGenerationOrchestrator:
             raise ValueError("FFmpeg compositor not available")
         
         # Use EducationalCompositor for final composition
-        compositor = EducationalCompositor(work_dir="/tmp/educational_videos")
+        import tempfile
+        temp_base = tempfile.gettempdir()
+        work_dir = os.path.join(temp_base, "educational_videos")
+        compositor = EducationalCompositor(work_dir=work_dir)
         
         # Get music URL if available
         music_url = None

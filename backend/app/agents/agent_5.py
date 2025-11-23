@@ -52,6 +52,19 @@ async def generate_video_replicate(
     Returns:
         URL of the generated video
     """
+    # Clean and validate the API key before use
+    if api_key:
+        api_key = api_key.strip()
+        # Remove surrounding quotes if present
+        if (api_key.startswith('"') and api_key.endswith('"')) or (api_key.startswith("'") and api_key.endswith("'")):
+            api_key = api_key[1:-1].strip()
+    
+    if not api_key or not api_key.startswith("r8_"):
+        key_preview = f"{api_key[:5]}...{api_key[-3:]}" if api_key and len(api_key) > 8 else (f"{api_key[:5]}..." if api_key else "None")
+        logger.error(f"Invalid API key passed to generate_video_replicate: preview: {key_preview}, length: {len(api_key) if api_key else 0}")
+        raise ValueError(f"Invalid Replicate API key format. Expected to start with 'r8_', got: {api_key[:10] if api_key else 'None'}...")
+    
+    logger.debug(f"generate_video_replicate using API key (starts with: {api_key[:5]}..., length: {len(api_key)})")
     service = ReplicateVideoService(api_key)
     return await service.generate_video(
         prompt=prompt,
@@ -506,24 +519,88 @@ async def agent_5_process(
     """
     settings = get_settings()
 
-    # Get Replicate API key from Secrets Manager or settings
+    # Get Replicate API key, prioritizing .env file for local development
+    # For local development (DEBUG=True): checks .env first, then AWS Secrets Manager
+    # For production: checks AWS Secrets Manager first, then .env
+    def clean_api_key(key: Optional[str]) -> Optional[str]:
+        """Clean API key by stripping whitespace and removing surrounding quotes."""
+        if not key:
+            return None
+        key = key.strip()
+        # Remove surrounding quotes if present (common .env file issue)
+        if (key.startswith('"') and key.endswith('"')) or (key.startswith("'") and key.endswith("'")):
+            key = key[1:-1].strip()
+        return key if key else None
+    
     replicate_api_key = None
-    try:
-        from app.services.secrets import get_secret
-        replicate_api_key = get_secret("pipeline/replicate-api-key")
-        if replicate_api_key:
-            logger.info(f"Retrieved REPLICATE_API_KEY from AWS Secrets Manager for Agent5 (length: {len(replicate_api_key)})")
+    
+    # For local development, prioritize .env file
+    key_source = None
+    if settings.DEBUG:
+        # Local development: check .env first
+        env_key = clean_api_key(settings.REPLICATE_API_KEY)
+        if env_key:
+            replicate_api_key = env_key
+            key_source = ".env file (settings.REPLICATE_API_KEY)"
+            key_preview = f"{replicate_api_key[:5]}...{replicate_api_key[-3:]}" if len(replicate_api_key) > 8 else f"{replicate_api_key[:5]}..."
+            logger.info(f"Agent5: Using REPLICATE_API_KEY from {key_source} (local development, preview: {key_preview}, length: {len(replicate_api_key)})")
         else:
-            logger.warning("REPLICATE_API_KEY retrieved from Secrets Manager but is None or empty")
-    except Exception as e:
-        logger.error(f"Could not retrieve REPLICATE_API_KEY from Secrets Manager: {e}, falling back to settings")
-        replicate_api_key = settings.REPLICATE_API_KEY
+            # Fallback to AWS Secrets Manager if .env doesn't have it
+            try:
+                from app.services.secrets import get_secret
+                secrets_key = get_secret("pipeline/replicate-api-key")
+                if secrets_key:
+                    replicate_api_key = clean_api_key(secrets_key)
+                    if replicate_api_key:
+                        key_source = "AWS Secrets Manager (pipeline/replicate-api-key)"
+                        key_preview = f"{replicate_api_key[:5]}...{replicate_api_key[-3:]}" if len(replicate_api_key) > 8 else f"{replicate_api_key[:5]}..."
+                        logger.info(f"Agent5: Using REPLICATE_API_KEY from {key_source} (fallback, preview: {key_preview}, length: {len(replicate_api_key)})")
+                    else:
+                        replicate_api_key = None
+            except Exception as e:
+                logger.debug(f"Could not retrieve REPLICATE_API_KEY from Secrets Manager: {e}")
+    else:
+        # Production: check AWS Secrets Manager first
+        try:
+            from app.services.secrets import get_secret
+            secrets_key = get_secret("pipeline/replicate-api-key")
+            if secrets_key:
+                replicate_api_key = clean_api_key(secrets_key)
+                if replicate_api_key:
+                    key_source = "AWS Secrets Manager (pipeline/replicate-api-key)"
+                    key_preview = f"{replicate_api_key[:5]}...{replicate_api_key[-3:]}" if len(replicate_api_key) > 8 else f"{replicate_api_key[:5]}..."
+                    logger.info(f"Agent5: Using REPLICATE_API_KEY from {key_source} (production, preview: {key_preview}, length: {len(replicate_api_key)})")
+                else:
+                    replicate_api_key = None
+        except Exception as e:
+            logger.debug(f"Could not retrieve REPLICATE_API_KEY from Secrets Manager: {e}, falling back to .env file")
+        
+        # Fallback to .env
+        if not replicate_api_key:
+            env_key = clean_api_key(settings.REPLICATE_API_KEY)
+            if env_key:
+                replicate_api_key = env_key
+                key_source = ".env file (settings.REPLICATE_API_KEY)"
+                key_preview = f"{replicate_api_key[:5]}...{replicate_api_key[-3:]}" if len(replicate_api_key) > 8 else f"{replicate_api_key[:5]}..."
+                logger.info(f"Agent5: Using REPLICATE_API_KEY from {key_source} (fallback, preview: {key_preview}, length: {len(replicate_api_key)})")
     
     if not replicate_api_key:
-        logger.error("REPLICATE_API_KEY not set - video generation will fail")
+        logger.error("REPLICATE_API_KEY not set in Secrets Manager or .env file - video generation will fail")
         raise ValueError("REPLICATE_API_KEY not configured. Check AWS Secrets Manager (pipeline/replicate-api-key) or .env file.")
+    
+    # Validate key format (should start with r8_)
+    if not replicate_api_key.startswith("r8_"):
+        key_preview = f"{replicate_api_key[:5]}...{replicate_api_key[-3:]}" if len(replicate_api_key) > 8 else f"{replicate_api_key[:5]}..."
+        logger.error(f"REPLICATE_API_KEY has invalid format! Expected to start with 'r8_', preview: {key_preview}, length: {len(replicate_api_key)})")
+        raise ValueError(f"REPLICATE_API_KEY has invalid format. Expected to start with 'r8_'")
+    
+    # Final log with source information
+    if key_source:
+        key_preview = f"{replicate_api_key[:5]}...{replicate_api_key[-3:]}" if len(replicate_api_key) > 8 else f"{replicate_api_key[:5]}..."
+        logger.info(f"Agent5: Final REPLICATE_API_KEY from {key_source} (preview: {key_preview}, length: {len(replicate_api_key)})")
     else:
-        logger.info(f"Using REPLICATE_API_KEY for Agent5 (starts with: {replicate_api_key[:5]}...)")
+        key_preview = f"{replicate_api_key[:5]}...{replicate_api_key[-3:]}" if len(replicate_api_key) > 8 else f"{replicate_api_key[:5]}..."
+        logger.info(f"Agent5: Using REPLICATE_API_KEY (preview: {key_preview}, length: {len(replicate_api_key)}, source: unknown)")
 
     # Initialize storage service if not provided
     if storage_service is None:

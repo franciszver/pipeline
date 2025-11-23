@@ -44,20 +44,38 @@ class NarrativeBuilderAgent:
         Args:
             replicate_api_key: Replicate API key (defaults to AWS Secrets Manager, then env var)
         """
-        # Try to get API key from parameter, then Secrets Manager, then settings
+        # Try to get API key from parameter, then .env (for local dev), then Secrets Manager
         if replicate_api_key:
             self.api_key = replicate_api_key
         else:
-            # Try Secrets Manager first
-            try:
-                from app.services.secrets import get_secret
-                self.api_key = get_secret("pipeline/replicate-api-key")
-                logger.debug("Retrieved REPLICATE_API_KEY from AWS Secrets Manager for NarrativeBuilderAgent")
-            except Exception as e:
-                logger.debug(f"Could not retrieve REPLICATE_API_KEY from Secrets Manager: {e}, falling back to settings")
-                from app.config import get_settings
-                settings = get_settings()
+            from app.config import get_settings
+            settings = get_settings()
+            
+            # For local development, prioritize .env file
+            if settings.DEBUG:
+                # Local development: check .env first
                 self.api_key = settings.REPLICATE_API_KEY
+                if self.api_key and self.api_key.strip():
+                    logger.debug("Using REPLICATE_API_KEY from .env file (local development) for NarrativeBuilderAgent")
+                else:
+                    # Fallback to AWS Secrets Manager if .env doesn't have it
+                    try:
+                        from app.services.secrets import get_secret
+                        self.api_key = get_secret("pipeline/replicate-api-key")
+                        if self.api_key:
+                            logger.debug("Using REPLICATE_API_KEY from AWS Secrets Manager (fallback) for NarrativeBuilderAgent")
+                    except Exception as e:
+                        logger.debug(f"Could not retrieve REPLICATE_API_KEY from Secrets Manager: {e}")
+            else:
+                # Production: check AWS Secrets Manager first
+                try:
+                    from app.services.secrets import get_secret
+                    self.api_key = get_secret("pipeline/replicate-api-key")
+                    if self.api_key:
+                        logger.debug("Using REPLICATE_API_KEY from AWS Secrets Manager for NarrativeBuilderAgent")
+                except Exception as e:
+                    logger.debug(f"Could not retrieve REPLICATE_API_KEY from Secrets Manager: {e}, falling back to .env file")
+                    self.api_key = settings.REPLICATE_API_KEY
         
         if not self.api_key:
             logger.warning(

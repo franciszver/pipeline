@@ -39,6 +39,151 @@ app = FastAPI(
 )
 
 
+@app.on_event("startup")
+async def startup_event():
+    """Log API keys and configuration on server startup."""
+    try:
+        # Use print as well to ensure it shows up
+        print("\n" + "=" * 60)
+        print("SERVER STARTUP - API Keys Configuration")
+        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info("SERVER STARTUP - API Keys Configuration")
+        logger.info("=" * 60)
+        
+        def format_key_preview(key: Optional[str], min_length: int = 8) -> str:
+            """Format API key for safe logging (shows first 5 and last 3 chars)."""
+            if not key or len(key) < min_length:
+                return "Not set" if not key else f"{key[:min_length]}... (too short)"
+            return f"{key[:5]}...{key[-3:]}"
+        
+        def format_key_source(key: Optional[str], env_key: Optional[str], secret_name: str) -> str:
+            """Determine and format where the key is coming from."""
+            if not key:
+                return "Not configured"
+            
+            # Check if it matches .env value
+            if env_key and key.strip() == env_key.strip():
+                return ".env file"
+            
+            # Check if it's from Secrets Manager (different from .env)
+            if env_key and key.strip() != env_key.strip():
+                return f"AWS Secrets Manager ({secret_name})"
+            
+            # If .env is empty but key exists, it's from Secrets Manager
+            if not env_key or not env_key.strip():
+                return f"AWS Secrets Manager ({secret_name})"
+            
+            return "Unknown source"
+        
+        # Check REPLICATE_API_KEY - always check .env first
+        replicate_key = settings.REPLICATE_API_KEY
+        if replicate_key:
+            replicate_key = replicate_key.strip()
+            # Remove surrounding quotes if present
+            if (replicate_key.startswith('"') and replicate_key.endswith('"')) or \
+               (replicate_key.startswith("'") and replicate_key.endswith("'")):
+                replicate_key = replicate_key[1:-1].strip()
+        
+        if replicate_key:
+            replicate_source = ".env file"
+        else:
+            # Fallback to orchestrator function (checks Secrets Manager)
+            try:
+                from app.services.orchestrator import _get_replicate_api_key
+                replicate_key = _get_replicate_api_key()
+                replicate_env = settings.REPLICATE_API_KEY
+                replicate_source = format_key_source(replicate_key, replicate_env, "pipeline/replicate-api-key")
+            except Exception as e:
+                replicate_key = None
+                replicate_source = f"Error: {e}"
+        
+        msg = f"REPLICATE_API_KEY: {format_key_preview(replicate_key)} | Source: {replicate_source} | Length: {len(replicate_key) if replicate_key else 0}"
+        logger.info(msg)
+        print(msg)
+        
+        # Check OPENAI_API_KEY - always check .env first
+        openai_key = settings.OPENAI_API_KEY
+        if openai_key:
+            openai_key = openai_key.strip()
+            # Remove surrounding quotes if present
+            if (openai_key.startswith('"') and openai_key.endswith('"')) or \
+               (openai_key.startswith("'") and openai_key.endswith("'")):
+                openai_key = openai_key[1:-1].strip()
+        
+        if openai_key:
+            openai_source = ".env file"
+        else:
+            # Fallback to orchestrator function (checks Secrets Manager)
+            try:
+                from app.services.orchestrator import _get_openai_api_key
+                openai_key = _get_openai_api_key()
+                openai_env = settings.OPENAI_API_KEY
+                openai_source = format_key_source(openai_key, openai_env, "pipeline/openai-api-key")
+            except Exception as e:
+                openai_key = None
+                openai_source = f"Error: {e}"
+        
+        msg = f"OPENAI_API_KEY:   {format_key_preview(openai_key)} | Source: {openai_source} | Length: {len(openai_key) if openai_key else 0}"
+        logger.info(msg)
+        print(msg)
+        
+        # Check AWS credentials
+        aws_access_key = settings.AWS_ACCESS_KEY_ID
+        aws_secret_key = settings.AWS_SECRET_ACCESS_KEY
+        msg1 = f"AWS_ACCESS_KEY_ID: {format_key_preview(aws_access_key)} | Length: {len(aws_access_key) if aws_access_key else 0}"
+        msg2 = f"AWS_SECRET_KEY:    {format_key_preview(aws_secret_key)} | Length: {len(aws_secret_key) if aws_secret_key else 0}"
+        logger.info(msg1)
+        logger.info(msg2)
+        print(msg1)
+        print(msg2)
+        
+        # Check S3 bucket
+        s3_bucket = settings.S3_BUCKET_NAME
+        msg = f"S3_BUCKET_NAME:    {s3_bucket if s3_bucket else 'Not set'}"
+        logger.info(msg)
+        print(msg)
+        
+        # Check database URL (sanitized - don't show password)
+        db_url = settings.DATABASE_URL
+        if db_url and "@" in db_url:
+            # Mask password in database URL
+            try:
+                parts = db_url.split("@")
+                if len(parts) == 2:
+                    user_part = parts[0]
+                    if ":" in user_part:
+                        user, _ = user_part.rsplit(":", 1)
+                        masked_url = f"{user}:***@{parts[1]}"
+                    else:
+                        masked_url = f"{user_part}:***@{parts[1]}"
+                else:
+                    masked_url = db_url
+            except:
+                masked_url = "***"
+            msg = f"DATABASE_URL:      {masked_url}"
+        else:
+            msg = f"DATABASE_URL:      {db_url if db_url else 'Not set'}"
+        logger.info(msg)
+        print(msg)
+        
+        # Environment info
+        msg1 = f"DEBUG Mode:        {settings.DEBUG}"
+        msg2 = f"Environment:       {'Local Development' if settings.DEBUG else 'Production'}"
+        logger.info(msg1)
+        logger.info(msg2)
+        logger.info("=" * 60)
+        print(msg1)
+        print(msg2)
+        print("=" * 60 + "\n")
+    except Exception as e:
+        logger.error(f"Error in startup event: {e}", exc_info=True)
+        print(f"ERROR in startup event: {e}")
+    except Exception as e:
+        logger.error(f"Error in startup event: {e}", exc_info=True)
+        print(f"ERROR in startup event: {e}")
+
+
 @app.get("/health")
 @app.get("/api/health")
 def health_check():
