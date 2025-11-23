@@ -294,4 +294,95 @@ export const scriptRouter = createTRPCRouter({
 
       return { success: true };
     }),
+
+  checkProcessing: protectedProcedure.query(async ({ ctx }) => {
+    if (!ctx.session?.user?.id) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "User not authenticated",
+      });
+    }
+
+    try {
+      const apiUrl = `${env.VIDEO_PROCESSING_API_URL}/api/checkprocessing`;
+
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: ctx.session.user.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Check processing API returned status ${response.status}: ${errorText}`,
+        );
+      }
+
+      const result = (await response.json()) as {
+        hasActiveProcess: boolean;
+        sessionId?: string;
+        websocketUrl?: string;
+      };
+
+      return result;
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to check processing status",
+      });
+    }
+  }),
+
+  stopProcessing: protectedProcedure.mutation(async ({ ctx }) => {
+    if (!ctx.session?.user?.id) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "User not authenticated",
+      });
+    }
+
+    try {
+      const apiUrl = `${env.VIDEO_PROCESSING_API_URL}/api/stopprocessing`;
+
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: ctx.session.user.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Stop processing API returned status ${response.status}: ${errorText}`,
+        );
+      }
+
+      const result = (await response.json()) as {
+        success: boolean;
+        message: string;
+      };
+
+      return result;
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to stop processing",
+      });
+    }
+  }),
 });

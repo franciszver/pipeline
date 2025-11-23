@@ -184,6 +184,9 @@ class VideoGenerationOrchestrator:
             websocket_manager: WebSocket manager for real-time updates
         """
         self.websocket_manager = websocket_manager
+        
+        # Cancellation support
+        self.cancellation_event = asyncio.Event()
 
         # Initialize AI agents
         openai_api_key = _get_openai_api_key()
@@ -219,6 +222,14 @@ class VideoGenerationOrchestrator:
         except RuntimeError as e:
             logger.warning(f"FFmpeg not available: {e}. Video composition will not work.")
             self.ffmpeg_compositor = None
+    
+    def cancel(self):
+        """
+        Cancel the orchestrator process.
+        Sets the cancellation event which will be checked at key points.
+        """
+        self.cancellation_event.set()
+        logger.info("Orchestrator cancellation requested")
 
     async def generate_images(
         self,
@@ -3122,6 +3133,15 @@ class VideoGenerationOrchestrator:
                     logger.warning(f"Failed to send status via WebSocket (will retry): {ws_error}")
                     # Continue processing - WebSocket reconnection will be handled
             
+            # Check for cancellation before starting agents
+            if self.cancellation_event.is_set():
+                logger.info(f"Orchestrator cancelled before starting agents for session {sessionId}")
+                await self._send_orchestrator_status(
+                    userId, sessionId, "cancelled",
+                    {"message": "Video generation process was cancelled"}
+                )
+                return
+            
             # Send orchestrator processing status
             await self._send_orchestrator_status(
                 userId, sessionId, "processing",
@@ -3207,6 +3227,9 @@ class VideoGenerationOrchestrator:
             try:
                 agent2_result, agent4_result = await asyncio.gather(agent2_task, agent4_task)
                 logger.info(f"Agent2 and Agent4 completed successfully for session {sessionId}")
+            except asyncio.CancelledError:
+                logger.info(f"Agent2 or Agent4 cancelled for session {sessionId}")
+                raise
             except Exception as e:
                 logger.error(f"Agent2 or Agent4 failed: {e}")
                 await self._send_orchestrator_status(
@@ -3214,6 +3237,15 @@ class VideoGenerationOrchestrator:
                     {"error": str(e), "reason": f"Agent execution failed: {type(e).__name__}"}
                 )
                 raise
+            
+            # Check for cancellation after Agent2 and Agent4 complete
+            if self.cancellation_event.is_set():
+                logger.info(f"Orchestrator cancelled after Agent2/Agent4 for session {sessionId}")
+                await self._send_orchestrator_status(
+                    userId, sessionId, "cancelled",
+                    {"message": "Video generation process was cancelled"}
+                )
+                return
             
             # After Agent2+Agent4 complete successfully, trigger Agent5 synchronously
             await self._send_orchestrator_status(
@@ -3234,6 +3266,15 @@ class VideoGenerationOrchestrator:
             except Exception as e:
                 logger.warning(f"Orchestrator could not load agent_4_output.json, Agent5 will scan S3: {e}")
 
+            # Check for cancellation before starting Agent5
+            if self.cancellation_event.is_set():
+                logger.info(f"Orchestrator cancelled before starting Agent5 for session {sessionId}")
+                await self._send_orchestrator_status(
+                    userId, sessionId, "cancelled",
+                    {"message": "Video generation process was cancelled"}
+                )
+                return
+            
             try:
                 # Generate supersessionid for Agent5
                 agent5_supersessionid = f"{sessionId}_{secrets.token_urlsafe(12)[:16]}"
@@ -3267,6 +3308,9 @@ class VideoGenerationOrchestrator:
                 
                 logger.info(f"Full Test process completed successfully for session {sessionId}")
                 
+            except asyncio.CancelledError:
+                logger.info(f"Agent5 cancelled for session {sessionId}")
+                raise
             except Exception as e:
                 logger.error(f"Agent5 failed: {e}")
                 await self._send_orchestrator_status(

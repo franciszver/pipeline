@@ -7,7 +7,7 @@ import asyncio
 import json
 import logging
 import httpx
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks, HTTPException, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
@@ -42,6 +42,13 @@ app = FastAPI(
 @app.on_event("startup")
 async def startup_event():
     """Log API keys and configuration on server startup."""
+    # Initialize process tracking system
+    # Tracks active video generation processes per userId
+    # Structure: {userId: {sessionId: str, task: asyncio.Task, orchestrator: VideoGenerationOrchestrator}}
+    if not hasattr(app.state, 'active_user_processes'):
+        app.state.active_user_processes: Dict[str, Dict[str, Any]] = {}
+    logger.info("Process tracking system initialized")
+    
     try:
         # Use print as well to ensure it shows up
         print("\n" + "=" * 60)
@@ -624,6 +631,12 @@ async def start_processing(
     - Agent5: Requires userID, sessionID, supersessionid
     """
     agent_selection = request.agent_selection or "Full Test"
+    
+    # Extract userId for process tracking (will be set in each mode handler)
+    user_id_for_tracking: Optional[str] = None
+    
+    # Check for existing active process before starting
+    # We'll check after extracting userId in each mode handler
 
     # Try to get database connection, but make it optional
     db = None
@@ -650,6 +663,11 @@ async def start_processing(
         if video_session_data:
             session_id = video_session_data.get("id") or request.sessionID
             user_id = video_session_data.get("user_id") or request.userID
+            # Strip if they're strings
+            if isinstance(session_id, str):
+                session_id = session_id.strip()
+            if isinstance(user_id, str):
+                user_id = user_id.strip()
         else:
             if not request.sessionID or not request.userID:
                 raise HTTPException(
@@ -712,7 +730,31 @@ async def start_processing(
                 status_code=400,
                 detail="sessionID and userID are required for Full Test",
             )
+        
+        # Check if user already has an active process
+        if not hasattr(app.state, 'active_user_processes'):
+            app.state.active_user_processes = {}
+        
+        if user_id in app.state.active_user_processes:
+            active_process = app.state.active_user_processes[user_id]
+            return StartProcessingResponse(
+                success=False,
+                message="A video generation process is already in progress for this user. Please cancel the current process before starting a new one.",
+                sessionID=active_process.get("sessionId") or ""
+            )
 
+        # Create orchestrator and register BEFORE creating task to avoid race conditions
+        from app.services.orchestrator import VideoGenerationOrchestrator
+        orchestrator = VideoGenerationOrchestrator(websocket_manager)
+        
+        # Register process in tracking system BEFORE creating task
+        # This ensures stopProcessing can find it immediately
+        app.state.active_user_processes[user_id] = {
+            "sessionId": session_id,
+            "task": None,  # Will be set immediately below
+            "orchestrator": orchestrator
+        }
+        
         # Use orchestrator to coordinate the Full Test process
         async def run_orchestrator():
             """Wrapper to catch and log errors in background task."""
@@ -739,20 +781,31 @@ async def start_processing(
                 )
             
             try:
-                from app.services.orchestrator import VideoGenerationOrchestrator
-                orchestrator = VideoGenerationOrchestrator(websocket_manager)
                 await orchestrator.start_full_test_process(
                     userId=user_id,
                     sessionId=session_id,
                     db=db
                 )
                 logger.info(f"Orchestrator completed for session {session_id}")
+            except asyncio.CancelledError:
+                logger.info(f"Orchestrator cancelled for session {session_id}")
+                raise
             except Exception as e:
                 logger.exception(f"Error in orchestrator for session {session_id}: {e}")
                 # Error status will be sent by orchestrator
+            finally:
+                # Clean up process tracking on completion
+                if user_id in app.state.active_user_processes:
+                    del app.state.active_user_processes[user_id]
+                    logger.info(f"Removed process tracking for user {user_id}, session {session_id}")
         
         loop = asyncio.get_event_loop()
         task = loop.create_task(run_orchestrator())
+        
+        # Update task reference in tracking immediately (check entry still exists)
+        if user_id in app.state.active_user_processes:
+            app.state.active_user_processes[user_id]["task"] = task
+        
         if not hasattr(app.state, 'background_tasks'):
             app.state.background_tasks = set()
         app.state.background_tasks.add(task)
@@ -770,6 +823,27 @@ async def start_processing(
             raise HTTPException(status_code=400, detail="userID is required for Agent2")
         if not request.sessionID or not request.sessionID.strip():
             raise HTTPException(status_code=400, detail="sessionID is required for Agent2")
+        
+        user_id = request.userID.strip()
+        
+        # Check if user already has an active process
+        if not hasattr(app.state, 'active_user_processes'):
+            app.state.active_user_processes = {}
+        
+        if user_id in app.state.active_user_processes:
+            active_process = app.state.active_user_processes[user_id]
+            return StartProcessingResponse(
+                success=False,
+                message="A video generation process is already in progress for this user. Please cancel the current process before starting a new one.",
+                sessionID=active_process.get("sessionId") or ""
+            )
+        
+        # Register process in tracking system BEFORE creating task to avoid race conditions
+        app.state.active_user_processes[user_id] = {
+            "sessionId": request.sessionID,
+            "task": None,  # Will be set immediately below
+            "orchestrator": None  # Agent2 doesn't use orchestrator
+        }
         
         # Start Agent2 with minimal inputs
         async def run_agent_2_with_error_handling():
@@ -793,6 +867,9 @@ async def start_processing(
                     storage_service=storage_service,
                     video_session_data=None
                 )
+            except asyncio.CancelledError:
+                logger.info(f"Agent2 cancelled for session {request.sessionID}")
+                raise
             except Exception as e:
                 logger.exception(f"Error in agent_2_process: {e}")
                 try:
@@ -806,9 +883,19 @@ async def start_processing(
                     })
                 except Exception:
                     pass
+            finally:
+                # Clean up process tracking on completion
+                if user_id in app.state.active_user_processes:
+                    del app.state.active_user_processes[user_id]
+                    logger.info(f"Removed process tracking for user {user_id}, session {request.sessionID}")
         
         loop = asyncio.get_event_loop()
         task = loop.create_task(run_agent_2_with_error_handling())
+        
+        # Update task reference in tracking immediately (check entry still exists)
+        if user_id in app.state.active_user_processes:
+            app.state.active_user_processes[user_id]["task"] = task
+        
         if not hasattr(app.state, 'background_tasks'):
             app.state.background_tasks = set()
         app.state.background_tasks.add(task)
@@ -825,6 +912,20 @@ async def start_processing(
             raise HTTPException(status_code=400, detail="userID is required for Agent4")
         if not request.sessionID or not request.sessionID.strip():
             raise HTTPException(status_code=400, detail="sessionID is required for Agent4")
+        
+        user_id = request.userID.strip()
+        
+        # Check if user already has an active process
+        if not hasattr(app.state, 'active_user_processes'):
+            app.state.active_user_processes = {}
+        
+        if user_id in app.state.active_user_processes:
+            active_process = app.state.active_user_processes[user_id]
+            return StartProcessingResponse(
+                success=False,
+                message="A video generation process is already in progress for this user. Please cancel the current process before starting a new one.",
+                sessionID=active_process.get("sessionId") or ""
+            )
         
         # Query video_session table to get the same data Agent2 uses
         video_session_data = None
@@ -853,6 +954,13 @@ async def start_processing(
             logger.warning(f"Could not load video_session data for Agent4: {e}")
             # Continue anyway - Agent4 can work with just the script parameter
         
+        # Register process in tracking system BEFORE creating task to avoid race conditions
+        app.state.active_user_processes[user_id] = {
+            "sessionId": request.sessionID,
+            "task": None,  # Will be set immediately below
+            "orchestrator": None  # Agent4 doesn't use orchestrator
+        }
+        
         # Start Agent4 directly
         async def run_agent_4_with_error_handling():
             logger = logging.getLogger(__name__)
@@ -879,6 +987,9 @@ async def start_processing(
                     video_session_data=video_session_data,  # Pass same data as orchestrator
                     db=db  # Pass database session so Agent4 can query if needed
                 )
+            except asyncio.CancelledError:
+                logger.info(f"Agent4 cancelled for session {request.sessionID}")
+                raise
             except Exception as e:
                 logger.exception(f"Error in agent_4_process: {e}")
                 try:
@@ -892,9 +1003,19 @@ async def start_processing(
                     })
                 except Exception:
                     pass
+            finally:
+                # Clean up process tracking on completion
+                if user_id in app.state.active_user_processes:
+                    del app.state.active_user_processes[user_id]
+                    logger.info(f"Removed process tracking for user {user_id}, session {request.sessionID}")
         
         loop = asyncio.get_event_loop()
         task = loop.create_task(run_agent_4_with_error_handling())
+        
+        # Update task reference in tracking immediately (check entry still exists)
+        if user_id in app.state.active_user_processes:
+            app.state.active_user_processes[user_id]["task"] = task
+        
         if not hasattr(app.state, 'background_tasks'):
             app.state.background_tasks = set()
         app.state.background_tasks.add(task)
@@ -913,6 +1034,27 @@ async def start_processing(
             raise HTTPException(status_code=400, detail="sessionID is required for Agent5")
         if not request.supersessionid or not request.supersessionid.strip():
             raise HTTPException(status_code=400, detail="supersessionid is required for Agent5")
+        
+        user_id = request.userID.strip()
+        
+        # Check if user already has an active process
+        if not hasattr(app.state, 'active_user_processes'):
+            app.state.active_user_processes = {}
+        
+        if user_id in app.state.active_user_processes:
+            active_process = app.state.active_user_processes[user_id]
+            return StartProcessingResponse(
+                success=False,
+                message="A video generation process is already in progress for this user. Please cancel the current process before starting a new one.",
+                sessionID=active_process.get("sessionId") or ""
+            )
+        
+        # Register process in tracking system BEFORE creating task to avoid race conditions
+        app.state.active_user_processes[user_id] = {
+            "sessionId": request.sessionID,
+            "task": None,  # Will be set immediately below
+            "orchestrator": None  # Agent5 doesn't use orchestrator
+        }
         
         # Start Agent5 directly
         async def run_agent_5_with_error_handling():
@@ -935,6 +1077,9 @@ async def start_processing(
                     storage_service=storage_service,
                     pipeline_data=None  # Optional
                 )
+            except asyncio.CancelledError:
+                logger.info(f"Agent5 cancelled for session {request.sessionID}")
+                raise
             except Exception as e:
                 logger.exception(f"Error in agent_5_process: {e}")
                 try:
@@ -948,9 +1093,19 @@ async def start_processing(
                     })
                 except Exception:
                     pass
+            finally:
+                # Clean up process tracking on completion
+                if user_id in app.state.active_user_processes:
+                    del app.state.active_user_processes[user_id]
+                    logger.info(f"Removed process tracking for user {user_id}, session {request.sessionID}")
         
         loop = asyncio.get_event_loop()
         task = loop.create_task(run_agent_5_with_error_handling())
+        
+        # Update task reference in tracking immediately (check entry still exists)
+        if user_id in app.state.active_user_processes:
+            app.state.active_user_processes[user_id]["task"] = task
+        
         if not hasattr(app.state, 'background_tasks'):
             app.state.background_tasks = set()
         app.state.background_tasks.add(task)
@@ -964,6 +1119,210 @@ async def start_processing(
     
     else:
         raise HTTPException(status_code=400, detail=f"Invalid agent_selection: {agent_selection}. Must be 'Full Test', 'Agent2', 'Agent4', or 'Agent5'")
+
+
+# =============================================================================
+# Stop Processing API Endpoint
+# =============================================================================
+
+class StopProcessingRequest(BaseModel):
+    """Request model for stopping video generation process."""
+    userId: str
+
+
+class StopProcessingResponse(BaseModel):
+    """Response model for stop processing endpoint."""
+    success: bool
+    message: str
+
+
+@app.post("/api/stopprocessing", response_model=StopProcessingResponse)
+async def stop_processing(request: StopProcessingRequest) -> StopProcessingResponse:
+    """
+    Stop any active video generation process for a user.
+    
+    Args:
+        request: Contains userId
+        
+    Returns:
+        Success status and message
+    """
+    user_id = request.userId.strip()
+    
+    # Validate user_id
+    if not user_id:
+        raise HTTPException(status_code=400, detail="userId cannot be empty")
+    
+    # Initialize if not exists
+    if not hasattr(app.state, 'active_user_processes'):
+        app.state.active_user_processes = {}
+    
+    # Check if user has active process
+    if user_id not in app.state.active_user_processes:
+        return StopProcessingResponse(
+            success=True,  # Idempotent - no process to stop is considered success
+            message="No active video generation process found for this user"
+        )
+    
+    active_process = app.state.active_user_processes[user_id]
+    session_id = active_process.get("sessionId") or ""
+    task = active_process.get("task")
+    orchestrator = active_process.get("orchestrator")
+    
+    try:
+        # Cancel orchestrator if it exists and has cancel method
+        if orchestrator is not None and hasattr(orchestrator, 'cancel'):
+            try:
+                orchestrator.cancel()
+                logger.info(f"Cancelled orchestrator for user {user_id}, session {session_id}")
+            except Exception as cancel_error:
+                logger.warning(f"Error cancelling orchestrator: {cancel_error}")
+        
+        # Cancel the asyncio task
+        if task:
+            # Check again if task is done (it might have completed between checks)
+            if not task.done():
+                task.cancel()
+                try:
+                    # Use asyncio.wait_for to prevent hanging if task doesn't respond to cancellation
+                    await asyncio.wait_for(task, timeout=5.0)
+                except asyncio.CancelledError:
+                    logger.info(f"Cancelled task for user {user_id}, session {session_id}")
+                except asyncio.TimeoutError:
+                    logger.warning(f"Task cancellation timeout for user {user_id}, session {session_id}")
+                except Exception as e:
+                    logger.warning(f"Exception while awaiting cancelled task: {e}")
+            else:
+                logger.info(f"Task already done for user {user_id}, session {session_id}")
+        
+        # Send WebSocket message indicating cancellation (only if session_id is valid)
+        if session_id:
+            try:
+                await websocket_manager.send_progress(session_id, {
+                    "agentnumber": "Orchestrator",
+                    "userID": user_id,
+                    "sessionID": session_id,
+                    "status": "cancelled",
+                    "message": "Video generation process was cancelled by user"
+                })
+            except Exception as ws_error:
+                logger.warning(f"Failed to send cancellation message via WebSocket: {ws_error}")
+        
+        # Remove from tracking (check it still exists - might have been removed by finally block)
+        if user_id in app.state.active_user_processes:
+            del app.state.active_user_processes[user_id]
+            logger.info(f"Stopped and removed process tracking for user {user_id}, session {session_id}")
+        else:
+            logger.warning(f"Process tracking already removed for user {user_id}, session {session_id}")
+        
+        return StopProcessingResponse(
+            success=True,
+            message="Video generation process stopped successfully"
+        )
+    except Exception as e:
+        logger.exception(f"Error stopping process for user {user_id}: {e}")
+        # Still remove from tracking even if cancellation failed (check it exists)
+        if user_id in app.state.active_user_processes:
+            del app.state.active_user_processes[user_id]
+        return StopProcessingResponse(
+            success=False,
+            message=f"Error stopping process: {str(e)}"
+        )
+
+
+# =============================================================================
+# Check Processing API Endpoint
+# =============================================================================
+
+class CheckProcessingRequest(BaseModel):
+    """Request model for checking active video generation process."""
+    userId: str
+
+
+class CheckProcessingResponse(BaseModel):
+    """Response model for check processing endpoint."""
+    hasActiveProcess: bool
+    sessionId: Optional[str] = None
+    websocketUrl: Optional[str] = None
+
+
+@app.post("/api/checkprocessing", response_model=CheckProcessingResponse)
+async def check_processing(
+    request: CheckProcessingRequest,
+    http_request: Request
+) -> CheckProcessingResponse:
+    """
+    Check if there's an active video generation process for a user.
+    
+    Args:
+        request: Contains userId
+        http_request: HTTP request object for constructing websocket URL
+        
+    Returns:
+        Information about active process including websocket URL if active
+    """
+    user_id = request.userId.strip()
+    
+    # Validate user_id
+    if not user_id:
+        raise HTTPException(status_code=400, detail="userId cannot be empty")
+    
+    # Initialize if not exists
+    if not hasattr(app.state, 'active_user_processes'):
+        app.state.active_user_processes = {}
+    
+    # Check if user has active process
+    if user_id not in app.state.active_user_processes:
+        return CheckProcessingResponse(
+            hasActiveProcess=False
+        )
+    
+    active_process = app.state.active_user_processes[user_id]
+    session_id = active_process.get("sessionId") or ""
+    
+    if not session_id:
+        return CheckProcessingResponse(
+            hasActiveProcess=False
+        )
+    
+    # Construct websocket URL
+    # Try to use VIDEO_PROCESSING_API_URL from config first
+    base_url = settings.VIDEO_PROCESSING_API_URL
+    
+    # If not set, construct from request
+    if not base_url:
+        scheme = "wss" if http_request.url.scheme == "https" else "ws"
+        host = http_request.url.hostname
+        port = http_request.url.port
+        
+        # Validate hostname
+        if not host:
+            logger.warning(f"Could not determine hostname from request, using default localhost")
+            host = "localhost"
+            port = 8000
+        
+        # Handle port - include it if it's not a standard port
+        if port is not None and port not in [80, 443]:
+            base_url = f"{scheme}://{host}:{port}"
+        else:
+            base_url = f"{scheme}://{host}"
+    else:
+        # Convert http/https to ws/wss
+        if base_url.startswith("https://"):
+            base_url = base_url.replace("https://", "wss://")
+        elif base_url.startswith("http://"):
+            base_url = base_url.replace("http://", "ws://")
+        else:
+            # Default to ws:// if no protocol
+            base_url = f"ws://{base_url}"
+    
+    websocket_url = f"{base_url}/ws/{session_id}"
+    
+    return CheckProcessingResponse(
+        hasActiveProcess=True,
+        sessionId=session_id,
+        websocketUrl=websocket_url
+    )
 
 
 # =============================================================================
