@@ -10,6 +10,7 @@ import threading
 import logging
 import asyncio
 import json
+from datetime import datetime
 
 from app.database import get_db
 from app.models.database import Session as SessionModel, Asset, User
@@ -2177,30 +2178,81 @@ async def compose_hardcode_video(
 
         # Trigger video composition asynchronously
         async def compose_video_task():
-            start_time = time.time()
+            # Create new DB session for background task
+            from app.database import SessionLocal
+            background_db = SessionLocal()
             try:
-                video_result = await orchestrator.compose_hardcode_video(
-                    session_id=session_id,
-                    user_id=current_user.id,
-                    image_result=image_result,
-                    audio_files=audio_files_list,
-                    diagram_s3_key=diagram_s3_key,
-                    segments=segments,
-                    output_s3_prefix=output_s3_prefix,
-                    template_title=template_title
-                )
+                start_time = time.time()
+                try:
+                    video_result = await orchestrator.compose_hardcode_video(
+                        session_id=session_id,
+                        user_id=current_user.id,
+                        image_result=image_result,
+                        audio_files=audio_files_list,
+                        diagram_s3_key=diagram_s3_key,
+                        segments=segments,
+                        output_s3_prefix=output_s3_prefix,
+                        template_title=template_title
+                    )
 
-                logger.info(f"Video composition completed for session {session_id}: {video_result}")
+                    logger.info(f"Video composition completed for session {session_id}: {video_result}")
 
-                # Update session with video URL
-                session.final_video_url = video_result.get("final_video_s3_key")
-                session.status = "completed"
-                db.commit()
+                    # Update session with video URL using background DB session
+                    background_session = background_db.query(SessionModel).filter(
+                        SessionModel.id == session_id
+                    ).first()
+                    # Get final_video_url once for both session update and webhook logging
+                    final_video_url = video_result.get("final_video_url")
+                    if background_session:
+                        # Use final_video_url (presigned URL) not final_video_s3_key (S3 path)
+                        background_session.final_video_url = final_video_url
+                        background_session.status = "completed"
+                        background_session.completed_at = datetime.utcnow()
+                        background_db.commit()
 
-            except Exception as e:
-                logger.exception(f"Error in video composition task: {e}")
-                session.status = "failed"
-                db.commit()
+                    # Log webhook event for successful completion
+                    # Wrap in try-except to avoid masking success if logging fails
+                    try:
+                        orchestrator._log_webhook_event(
+                            db=background_db,
+                            event_type="video_complete",
+                            session_id=session_id,
+                            video_url=final_video_url,
+                            status="received"
+                        )
+                    except Exception as log_error:
+                        # Log the error but don't fail the operation since video was successfully created
+                        logger.error(f"Failed to log webhook event for success: {log_error}")
+
+                except Exception as e:
+                    logger.exception(f"Error in video composition task: {e}")
+                    
+                    # Update session status using background DB session
+                    background_session = background_db.query(SessionModel).filter(
+                        SessionModel.id == session_id
+                    ).first()
+                    if background_session:
+                        try:
+                            background_session.status = "failed"
+                            background_db.commit()
+                        except Exception as commit_error:
+                            logger.error(f"Failed to update session status to failed: {commit_error}")
+                            background_db.rollback()
+
+                    # Log webhook event for failure
+                    try:
+                        orchestrator._log_webhook_event(
+                            db=background_db,
+                            event_type="video_failed",
+                            session_id=session_id,
+                            video_url=None,
+                            status="failed",
+                            error_message=str(e)
+                        )
+                    except Exception as log_error:
+                        logger.error(f"Failed to log webhook event for failure: {log_error}")
+            finally:
+                background_db.close()
 
         # Start composition in background
         import asyncio

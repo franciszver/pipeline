@@ -231,6 +231,65 @@ class VideoGenerationOrchestrator:
         self.cancellation_event.set()
         logger.info("Orchestrator cancellation requested")
 
+    def _log_webhook_event(
+        self,
+        db: Session,
+        event_type: str,
+        session_id: str,
+        video_url: Optional[str] = None,
+        status: str = "received",
+        error_message: Optional[str] = None
+    ) -> None:
+        """
+        Log webhook event to webhook_log table in database.
+        
+        Args:
+            db: Database session
+            event_type: Type of event (e.g., "video_complete", "video_failed")
+            session_id: Session ID
+            video_url: URL of the video (optional)
+            status: Status of the webhook ("received" or "failed")
+            error_message: Error message if applicable (optional)
+        """
+        from sqlalchemy import text as sql_text
+        
+        try:
+            # Generate ID similar to nanoid format
+            log_id = secrets.token_urlsafe(16)
+            
+            # Create payload matching template structure
+            payload = {
+                "status": event_type,
+                "sessionId": session_id
+            }
+            if video_url:
+                payload["videoUrl"] = video_url
+            
+            # Insert into webhook_log table using raw SQL
+            db.execute(
+                sql_text("""
+                    INSERT INTO webhook_log 
+                    (id, event_type, session_id, video_url, status, payload, error_message, created_at)
+                    VALUES 
+                    (:id, :event_type, :session_id, :video_url, :status, :payload::jsonb, :error_message, NOW())
+                """),
+                {
+                    "id": log_id,
+                    "event_type": event_type,
+                    "session_id": session_id,
+                    "video_url": video_url,
+                    "status": status,
+                    "payload": json.dumps(payload),
+                    "error_message": error_message
+                }
+            )
+            db.commit()
+            logger.info(f"[{session_id}] Webhook event logged: {event_type} (id: {log_id})")
+        except Exception as e:
+            logger.error(f"[{session_id}] Failed to log webhook event: {e}")
+            db.rollback()
+            raise
+
     async def generate_images(
         self,
         db: Session,
@@ -1665,8 +1724,22 @@ class VideoGenerationOrchestrator:
             if session:
                 session.status = "completed"
                 session.final_video_url = video_url
-                session.completed_at = datetime.now()
+                session.completed_at = datetime.utcnow()
                 db.commit()
+
+            # Log webhook event for successful completion
+            # Wrap in try-except to avoid masking success if logging fails
+            try:
+                self._log_webhook_event(
+                    db=db,
+                    event_type="video_complete",
+                    session_id=session_id,
+                    video_url=video_url,
+                    status="received"
+                )
+            except Exception as log_error:
+                # Log the error but don't fail the operation since video was successfully created
+                logger.error(f"[{session_id}] Failed to log webhook event for success: {log_error}")
 
             # Broadcast completion
             await self.websocket_manager.broadcast_status(
@@ -1694,6 +1767,19 @@ class VideoGenerationOrchestrator:
             if session:
                 session.status = "failed"
                 db.commit()
+
+            # Log webhook event for failure
+            try:
+                self._log_webhook_event(
+                    db=db,
+                    event_type="video_failed",
+                    session_id=session_id,
+                    video_url=None,
+                    status="failed",
+                    error_message=str(e)
+                )
+            except Exception as log_error:
+                logger.error(f"[{session_id}] Failed to log webhook event for failure: {log_error}")
 
             await self.websocket_manager.broadcast_status(
                 session_id,
@@ -3007,7 +3093,7 @@ class VideoGenerationOrchestrator:
             # Generate presigned URL
             final_video_url = self.storage_service.generate_presigned_url(
                 final_video_s3_key,
-                expires_in=86400  # 24 hours
+                expires_in=31536000  # 1 year
             )
             
             # Clean up local file
