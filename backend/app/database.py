@@ -1,6 +1,7 @@
 """
 Database configuration and session management.
 """
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -16,18 +17,36 @@ connect_args = {}
 # If using Neon database, configure SSL without requiring certificate files
 if "neon" in database_url.lower():
     import re
+    from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
-    # Remove sslmode from URL if present (we'll set it via connect_args)
-    database_url = re.sub(r"[&?]sslmode=[^&]*", "", database_url, flags=re.IGNORECASE)
+    # Parse the URL to properly handle query parameters
+    parsed = urlparse(database_url)
+    query_params = parse_qs(parsed.query)
+    
+    # Remove SSL-related parameters from query string (we'll set them via connect_args)
+    params_to_remove = ['sslmode', 'channel_binding', 'sslcert', 'sslkey', 'sslrootcert']
+    for param in params_to_remove:
+        query_params.pop(param, None)
+    
+    # Rebuild URL without SSL parameters
+    new_query = urlencode(query_params, doseq=True)
+    new_parsed = parsed._replace(query=new_query)
+    database_url = urlunparse(new_parsed)
+    
+    # Remove trailing & or ? if present
     database_url = re.sub(r"[&?]$", "", database_url)
 
     connect_args = {
         "sslmode": "require",
-        "sslrootcert": "/etc/pki/tls/certs/ca-bundle.crt",
+        # On Windows, don't require certificate files
+        # On Unix, use system certificates if available
+        "sslrootcert": "/etc/pki/tls/certs/ca-bundle.crt" if os.name != 'nt' else None,
         # Disable attempts to read ~/.postgresql certificates (blocked by ProtectHome)
         "sslcert": "",
         "sslkey": "",
     }
+    # Remove None values
+    connect_args = {k: v for k, v in connect_args.items() if v is not None}
 
 # Fallback: ensure SSL is at least preferred for PostgreSQL connections
 if database_url.startswith("postgresql") and "sslmode" not in connect_args:

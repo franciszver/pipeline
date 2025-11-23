@@ -193,12 +193,14 @@ export function NarrationEditor() {
                     </Badge>
                     <CardTitle className="text-sm font-medium">
                       {segment.type
-                        .split("_")
-                        .map(
-                          (word) =>
-                            word.charAt(0).toUpperCase() + word.slice(1),
-                        )
-                        .join(" ")}
+                        ? segment.type
+                            .split("_")
+                            .map(
+                              (word) =>
+                                word.charAt(0).toUpperCase() + word.slice(1),
+                            )
+                            .join(" ")
+                        : "Segment"}
                     </CardTitle>
                   </div>
                   <div className="text-muted-foreground flex items-center gap-2 text-xs">
@@ -251,7 +253,7 @@ export function NarrationEditor() {
                     Concepts:
                   </span>
                   <div className="flex flex-wrap gap-1">
-                    {segment.key_concepts.map((concept, i) => (
+                    {(segment.key_concepts || []).map((concept, i) => (
                       <Badge
                         key={i}
                         variant="secondary"

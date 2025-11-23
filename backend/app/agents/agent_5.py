@@ -20,8 +20,6 @@ import tempfile
 import time
 import httpx
 import logging
-import resource
-import signal
 
 logger = logging.getLogger(__name__)
 from pathlib import Path
@@ -295,18 +293,33 @@ async def concatenate_all_video_clips(clip_paths: List[str], output_path: str) -
         output_path
     ]
 
-    # Set PATH to ensure ffmpeg is accessible
+    # Set PATH to ensure ffmpeg is accessible (cross-platform)
     env = os.environ.copy()
-    bun_paths_to_add = [
-        '/home/ec2-user/.bun/bin',
-        os.path.expanduser('~/.bun/bin'),
-        '/usr/local/bin',
-        '/opt/homebrew/bin',
-    ]
     current_path = env.get('PATH', '')
+    
+    # Platform-specific paths to check
+    bun_paths_to_add = []
+    if os.name == 'nt':  # Windows
+        bun_paths_to_add = [
+            os.path.expanduser('~/.bun/bin'),
+            os.path.join(os.environ.get('ProgramFiles', ''), 'ffmpeg', 'bin'),
+            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'ffmpeg', 'bin'),
+        ]
+    else:  # Unix-like (macOS, Linux)
+        bun_paths_to_add = [
+            '/home/ec2-user/.bun/bin',
+            os.path.expanduser('~/.bun/bin'),
+            '/usr/local/bin',
+            '/opt/homebrew/bin',
+        ]
+    
+    # Filter to only existing directories and prepend to PATH
     new_path_parts = [p for p in bun_paths_to_add if os.path.isdir(p)]
-    new_path_parts.append(current_path)
-    env['PATH'] = ':'.join(new_path_parts)
+    if new_path_parts:
+        # Use platform-specific PATH separator
+        path_separator = os.pathsep
+        new_path_parts.append(current_path)
+        env['PATH'] = path_separator.join(new_path_parts)
 
     result = subprocess.run(cmd, capture_output=True, text=True, env=env)
     if result.returncode != 0:

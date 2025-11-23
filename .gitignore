@@ -126,3 +126,10 @@ backend/AGENT5_BUN_INSTALLATION.md
 backend/install_bun_ec2.ps1
 check_ec2_status.ps1
 security-check-pending-changes.md
+audit-git-history.ps1
+remove-secrets.ps1
+replace-secret.ps1
+replace-secrets-in-history.ps1
+replace-secrets.bat
+replace-secrets.sh
+docs/backend/TEST_UI_ENV_SETUP.md

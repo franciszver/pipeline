@@ -3,6 +3,7 @@ Configuration settings for the Gauntlet Pipeline backend.
 """
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -35,10 +36,14 @@ class Settings(BaseSettings):
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
     DEBUG: bool = True
+    
+    # Video Processing API URL (used by frontend)
+    VIDEO_PROCESSING_API_URL: Optional[str] = "http://localhost:8000"
 
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # Ignore extra environment variables
 
 
 @lru_cache()

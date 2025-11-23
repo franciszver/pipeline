@@ -45,13 +45,16 @@ def _get_openai_api_key() -> Optional[str]:
         from app.services.secrets import get_secret
         return get_secret("pipeline/openai-api-key")
     except Exception as e:
-        logger.debug(f"Could not retrieve OPENAI_API_KEY from Secrets Manager: {e}, falling back to settings")
+        # This is expected in local development - fallback to .env
+        logger.debug(f"Could not retrieve OPENAI_API_KEY from Secrets Manager: {e}, falling back to .env file")
         key = settings.OPENAI_API_KEY
         if not key:
             logger.warning(
-                "OPENAI_API_KEY not set in Secrets Manager or settings - "
+                "OPENAI_API_KEY not set in Secrets Manager or .env file - "
                 "image and audio generation will fail."
             )
+        else:
+            logger.debug("Using OPENAI_API_KEY from .env file")
         return key
 
 
@@ -66,13 +69,16 @@ def _get_replicate_api_key() -> Optional[str]:
         from app.services.secrets import get_secret
         return get_secret("pipeline/replicate-api-key")
     except Exception as e:
-        logger.debug(f"Could not retrieve REPLICATE_API_KEY from Secrets Manager: {e}, falling back to settings")
+        # This is expected in local development - fallback to .env
+        logger.debug(f"Could not retrieve REPLICATE_API_KEY from Secrets Manager: {e}, falling back to .env file")
         key = settings.REPLICATE_API_KEY
         if not key:
             logger.warning(
-                "REPLICATE_API_KEY not set in Secrets Manager or settings - "
+                "REPLICATE_API_KEY not set in Secrets Manager or .env file - "
                 "video and image generation will fail."
             )
+        else:
+            logger.debug("Using REPLICATE_API_KEY from .env file")
         return key
 
 
@@ -2980,7 +2986,7 @@ class VideoGenerationOrchestrator:
         self,
         userId: str,
         sessionId: str,
-        db: Session
+        db: Optional[Session] = None
     ) -> None:
         """
         Start the Full Test pipeline process.
@@ -3086,36 +3092,51 @@ class VideoGenerationOrchestrator:
                 {"message": "Orchestrator triggering Agent2 and Agent4 in parallel"}
             )
             
-            # Query video_session table to verify it exists
-            try:
-                result = db.execute(
-                    sql_text(
-                        "SELECT * FROM video_session WHERE id = :session_id AND user_id = :user_id"
-                    ),
-                    {"session_id": sessionId, "user_id": userId},
-                ).fetchone()
-                
-                if not result:
-                    raise ValueError(f"Video session not found for session_id={sessionId} and user_id={userId}")
-                
-                # Convert result to dict if needed
-                if hasattr(result, "_mapping"):
-                    video_session_data = dict(result._mapping)
-                else:
+            # Query video_session table to verify it exists (if db is available)
+            video_session_data = None
+            if db is not None:
+                try:
+                    result = db.execute(
+                        sql_text(
+                            "SELECT * FROM video_session WHERE id = :session_id AND user_id = :user_id"
+                        ),
+                        {"session_id": sessionId, "user_id": userId},
+                    ).fetchone()
+                    
+                    if not result:
+                        logger.warning(f"Video session not found for session_id={sessionId} and user_id={userId}, using minimal data")
+                        video_session_data = {
+                            "id": sessionId,
+                            "user_id": userId,
+                            "topic": "Sample Topic",
+                        }
+                    else:
+                        # Convert result to dict if needed
+                        if hasattr(result, "_mapping"):
+                            video_session_data = dict(result._mapping)
+                        else:
+                            video_session_data = {
+                                "id": getattr(result, "id", None),
+                                "user_id": getattr(result, "user_id", None),
+                                "topic": getattr(result, "topic", None),
+                                "confirmed_facts": getattr(result, "confirmed_facts", None),
+                                "generated_script": getattr(result, "generated_script", None),
+                            }
+                except Exception as e:
+                    logger.warning(f"Error querying video_session (using minimal data): {e}")
                     video_session_data = {
-                        "id": getattr(result, "id", None),
-                        "user_id": getattr(result, "user_id", None),
-                        "topic": getattr(result, "topic", None),
-                        "confirmed_facts": getattr(result, "confirmed_facts", None),
-                        "generated_script": getattr(result, "generated_script", None),
+                        "id": sessionId,
+                        "user_id": userId,
+                        "topic": "Sample Topic",
                     }
-            except Exception as e:
-                logger.error(f"Error querying video_session: {e}")
-                await self._send_orchestrator_status(
-                    userId, sessionId, "error",
-                    {"error": str(e), "reason": f"Database query failed: {type(e).__name__}"}
-                )
-                raise
+            else:
+                # No database available, create minimal video_session_data
+                logger.warning("Database not available, using minimal video_session_data for Full Test")
+                video_session_data = {
+                    "id": sessionId,
+                    "user_id": userId,
+                    "topic": "Sample Topic",
+                }
             
             # Trigger Agent2 and Agent4 in parallel
             agent2_task = agent_2_process(

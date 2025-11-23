@@ -93,7 +93,11 @@ def get_secret(secret_name: str) -> str:
         error_code = e.response.get('Error', {}).get('Code', 'Unknown')
         error_msg = e.response.get('Error', {}).get('Message', str(e))
         
-        logger.error(f"Failed to retrieve secret '{secret_name}': {error_code} - {error_msg}")
+        # Log as warning (not error) since fallback to .env is expected in local dev
+        if error_code == 'AccessDeniedException':
+            logger.warning(f"Secrets Manager access denied for '{secret_name}' (expected in local dev, will use .env fallback): {error_msg}")
+        else:
+            logger.warning(f"Failed to retrieve secret '{secret_name}': {error_code} - {error_msg} (will use .env fallback)")
         
         # Check if we have a stale cached value (use it as fallback)
         with _cache_lock:

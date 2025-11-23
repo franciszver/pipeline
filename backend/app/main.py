@@ -1576,6 +1576,29 @@ async def render_animated_video(request: AnimatedVideoRequest) -> AgentTestRespo
 
             logger.info(f"Rendering animated video: {cmd}")
 
+            # Build cross-platform PATH for bun
+            env = os.environ.copy()
+            current_path = env.get('PATH', '')
+            bun_paths_to_add = []
+            
+            if os.name == 'nt':  # Windows
+                bun_paths_to_add = [
+                    os.path.expanduser('~/.bun/bin'),
+                ]
+            else:  # Unix-like (macOS, Linux)
+                bun_paths_to_add = [
+                    os.path.expanduser('~/.bun/bin'),
+                    '/usr/local/bin',
+                    '/opt/homebrew/bin',
+                ]
+            
+            # Filter to only existing directories and prepend to PATH
+            new_path_parts = [p for p in bun_paths_to_add if os.path.isdir(p)]
+            if new_path_parts:
+                path_separator = os.pathsep
+                new_path_parts.append(current_path)
+                env['PATH'] = path_separator.join(new_path_parts)
+            
             result = await asyncio.to_thread(
                 subprocess.run,
                 cmd,
@@ -1583,7 +1606,7 @@ async def render_animated_video(request: AnimatedVideoRequest) -> AgentTestRespo
                 capture_output=True,
                 text=True,
                 shell=True,
-                env={**os.environ, "PATH": f"/Users/mus-east-2/.bun/bin:{os.environ.get('PATH', '')}"}
+                env=env
             )
 
             if result.returncode != 0:
@@ -1854,7 +1877,7 @@ async def generate_scene(request: SceneGenerateRequest):
             for i, url in enumerate(clip_urls):
                 response = await client.get(url)
                 response.raise_for_status()
-                clip_path = f"{temp_dir}/clip_{i}.mp4"
+                clip_path = os.path.join(temp_dir, f"clip_{i}.mp4")
                 with open(clip_path, 'wb') as f:
                     f.write(response.content)
                 clip_paths.append(clip_path)
@@ -1865,13 +1888,13 @@ async def generate_scene(request: SceneGenerateRequest):
             final_video_path = clip_paths[0]
         else:
             # Build ffmpeg command for crossfade stitching
-            final_video_path = f"{temp_dir}/final.mp4"
+            final_video_path = os.path.join(temp_dir, "final.mp4")
 
             # Improved transition: 0.7s fade for smoother blending
             transition_duration = 0.7
 
             # Create concat file for simple concatenation first
-            concat_list = f"{temp_dir}/concat.txt"
+            concat_list = os.path.join(temp_dir, "concat.txt")
             with open(concat_list, 'w') as f:
                 for clip_path in clip_paths:
                     f.write(f"file '{clip_path}'\n")
@@ -1949,20 +1972,20 @@ async def concatenate_videos(request: VideoConcatenateRequest):
 
         async with httpx.AsyncClient(timeout=300.0) as client:
             for i, url in enumerate(request.video_urls):
-                video_path = f"{temp_dir}/video_{i}.mp4"
+                video_path = os.path.join(temp_dir, f"video_{i}.mp4")
                 response = await client.get(url)
                 with open(video_path, 'wb') as f:
                     f.write(response.content)
                 video_paths.append(video_path)
 
         # Create concat file
-        concat_list = f"{temp_dir}/concat.txt"
+        concat_list = os.path.join(temp_dir, "concat.txt")
         with open(concat_list, 'w') as f:
             for path in video_paths:
                 f.write(f"file '{path}'\n")
 
         # Concatenate videos
-        output_path = f"{temp_dir}/final.mp4"
+        output_path = os.path.join(temp_dir, "final.mp4")
         concat_cmd = [
             "ffmpeg",
             "-f", "concat",

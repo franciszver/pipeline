@@ -1,0 +1,38 @@
+{
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			"Sid": "AllowListBucket",
+			"Effect": "Allow",
+			"Action": [
+				"s3:ListBucket",
+				"s3:GetBucketLocation"
+			],
+			"Resource": "arn:aws:s3:::pipeline-backend-assets"
+		},
+		{
+			"Sid": "AllowObjectOperations",
+			"Effect": "Allow",
+			"Action": [
+				"s3:GetObject",
+				"s3:PutObject",
+				"s3:DeleteObject"
+			],
+			"Resource": "arn:aws:s3:::pipeline-backend-assets/*"
+		},
+		{
+			"Sid": "AllowSecretsManagerAccess",
+			"Effect": "Allow",
+			"Action": [
+				"secretsmanager:GetSecretValue",
+				"secretsmanager:DescribeSecret"
+			],
+			"Resource": [
+				"arn:aws:secretsmanager:*:*:secret:pipeline/openai-api-key*",
+				"arn:aws:secretsmanager:*:*:secret:pipeline/replicate-api-key*",
+				"arn:aws:secretsmanager:*:*:secret:pipeline/openrouter-api-key*"
+			]
+		}
+	]
+}
+
