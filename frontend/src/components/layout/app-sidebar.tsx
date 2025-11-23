@@ -39,6 +39,7 @@ import {
 import { NavUser } from "./nav-user";
 import { api } from "@/trpc/react";
 import { Separator } from "@/components/ui/separator";
+import { VideoProgressBar } from "@/components/generation/VideoProgressBar";
 
 const navItems = [
   {
@@ -91,8 +92,9 @@ type SessionListItem = {
 
 export function AppSidebar({
   user,
+  userId,
   ...props
-}: React.ComponentProps<typeof Sidebar> & { user: User }) {
+}: React.ComponentProps<typeof Sidebar> & { user: User; userId: string }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentSessionId = searchParams.get("sessionId");
@@ -256,6 +258,13 @@ export function AppSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      {userId && (
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <VideoProgressBar userId={userId} />
+          </SidebarGroupContent>
+        </SidebarGroup>
+      )}
       <SidebarFooter>
         <NavUser user={user} />
       </SidebarFooter>

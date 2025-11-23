@@ -16,6 +16,8 @@ export async function UserSidebar() {
         image: null,
       };
 
-  return <AppSidebar user={user} />;
+  const userId = session?.user?.id ?? "";
+
+  return <AppSidebar user={user} userId={userId} />;
 }
 
